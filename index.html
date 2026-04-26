@@ -4,16 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FútbolApp - Gestión Deportiva</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome (Iconos sin SVG) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        /* Contenedor estricto para que la gráfica no desborde */
         .chart-container {
             position: relative;
             width: 100%;
@@ -65,7 +61,7 @@
             
             <div class="flex items-center space-x-4">
                 <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">
-                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando...
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando BD...
                 </span>
             </div>
         </header>
@@ -75,7 +71,6 @@
             <!-- VISTA 1: DASHBOARD -->
             <div id="view-dashboard" class="app-view fade-in">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <!-- Tarjetas (Mantenemos las estáticas del módulo anterior por ahora) -->
                     <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-slate-500 text-sm font-medium uppercase">Próximo Entreno</h3>
@@ -99,7 +94,6 @@
                     </div>
                 </div>
 
-                <!-- CONTENEDOR DE GRÁFICA CHART.JS -->
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-lg font-bold text-slate-800">Carga Física Semanal (GPS)</h3>
@@ -110,16 +104,15 @@
                 </div>
             </div>
 
-            <!-- VISTA 2: EJERCICIOS (CONECTADO A BASE DE DATOS) -->
+            <!-- VISTA 2: EJERCICIOS -->
             <div id="view-ejercicios" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Biblioteca dinámica guardada en la base de datos.</p>
+                    <p class="text-slate-500 text-sm">Biblioteca de tareas conectada a tu Base de Datos en tiempo real.</p>
                     <button id="btn-open-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm">
                         <i class="fa-solid fa-plus mr-2"></i> Nuevo Ejercicio
                     </button>
                 </div>
 
-                <!-- Grid donde se inyectarán los ejercicios desde Firebase -->
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-ejercicios-container">
                     <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
                         <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
@@ -181,85 +174,60 @@
         </div>
     </div>
 
-    <!-- SCRIPT PRINCIPAL (TIPO MODULE PARA PERMITIR IMPORTS DE FIREBASE) -->
+    <!-- SCRIPT PRINCIPAL CON FIREBASE -->
     <script type="module">
-        // ==========================================
-        // 1. CONFIGURACIÓN DE FIREBASE (NUBE)
-        // ==========================================
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Variables de entorno proporcionadas por Google Canvas
-        const isCanvasEnv = typeof __firebase_config !== 'undefined';
-        const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : null;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'futbol-app-local';
-        
-        let db, auth;
-        let dbEnLinea = false;
-        
-        // Memoria local de respaldo si no estamos en entorno Canvas/Firebase configurado
-        let ejerciciosLocales = [
-            { id: 'mock1', nombre: 'Rondos 4v2', categoria: 'Táctico', duracion: 15, descripcion: 'Posesión en espacio reducido.' },
-            { id: 'mock2', nombre: 'Circuito Fuerza', categoria: 'Físico', duracion: 20, descripcion: 'Fuerza explosiva 6 postas.' }
-        ];
+        // Aquí están tus claves reales insertadas
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWv7cVvQZtXMWMOYhhodfdt_6fstImXK4",
+            authDomain: "futbol-tracker-app.firebaseapp.com",
+            projectId: "futbol-tracker-app",
+            storageBucket: "futbol-tracker-app.firebasestorage.app",
+            messagingSenderId: "272883171358",
+            appId: "1:272883171358:web:c3e276ab3376923a912e0f"
+        };
 
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
         const statusBadge = document.getElementById('db-status');
 
-        if (isCanvasEnv && firebaseConfig) {
-            // Inicializar Firebase
-            const app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+        let dbEnLinea = false;
+        let ejerciciosLocales = [
+            { id: 'loc1', nombre: 'Rondos 4v2', categoria: 'Táctico', duracion: 15, descripcion: 'Posesión y transiciones rápidas.' }
+        ];
 
-            // Autenticación (Requerida por reglas de seguridad)
-            const initAuth = async () => {
-                try {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                } catch (error) {
-                    console.error("Error de Auth:", error);
-                    usarModoLocal();
-                }
-            };
-
-            initAuth();
-
-            // Escuchar estado del usuario
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    dbEnLinea = true;
-                    statusBadge.innerHTML = '<i class="fa-solid fa-cloud text-emerald-500 mr-1"></i> Nube Conectada';
-                    statusBadge.classList.replace('text-slate-500', 'text-emerald-700');
-                    statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
-                    iniciarEscuchaEjercicios();
-                }
-            });
-        } else {
-            // Si el usuario lo abre en su PC sin configurar, usamos el modo local para que no falle.
-            usarModoLocal();
-        }
-
-        function usarModoLocal() {
+        // Autenticación Anónima (Permite leer/escribir en la BD)
+        signInAnonymously(auth).then(() => {
+            dbEnLinea = true;
+            statusBadge.innerHTML = '<i class="fa-solid fa-cloud text-emerald-500 mr-1"></i> Nube Conectada';
+            statusBadge.classList.replace('text-slate-500', 'text-emerald-700');
+            statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+            iniciarEscuchaEjercicios();
+        }).catch((error) => {
+            console.error("Error conectando a Firebase:", error);
             dbEnLinea = false;
-            statusBadge.innerHTML = '<i class="fa-solid fa-hard-drive text-amber-500 mr-1"></i> Modo Local';
-            statusBadge.classList.replace('text-slate-500', 'text-amber-700');
-            statusBadge.classList.replace('bg-slate-100', 'bg-amber-100');
+            if (error.code === 'auth/configuration-not-found') {
+                statusBadge.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-500 mr-1"></i> Activar Auth en Firebase';
+                mostrarNotificacion("Ve a Firebase > Authentication > Sign-in method y habilita 'Anónimo'", true);
+            } else {
+                statusBadge.innerHTML = '<i class="fa-solid fa-hard-drive text-amber-500 mr-1"></i> Modo Local';
+            }
             renderizarEjercicios(ejerciciosLocales);
-        }
+        });
 
         // ==========================================
-        // 2. LÓGICA DE BASE DE DATOS (CRUD)
+        // LÓGICA DE BASE DE DATOS (CRUD)
         // ==========================================
         const contenedorEjercicios = document.getElementById('lista-ejercicios-container');
 
-        // Leer datos en tiempo real
         function iniciarEscuchaEjercicios() {
-            const path = `artifacts/${appId}/public/data/ejercicios`;
-            const ref = collection(db, path);
+            if (!dbEnLinea) return;
+            // Fíjate que la ruta apunta a tu colección 'ejercicios' en la raíz
+            const ref = collection(db, 'ejercicios');
             
             onSnapshot(ref, (snapshot) => {
                 const ejercicios = [];
@@ -273,7 +241,6 @@
             });
         }
 
-        // Renderizar Tarjetas HTML
         function renderizarEjercicios(ejercicios) {
             contenedorEjercicios.innerHTML = '';
             
@@ -287,7 +254,6 @@
             }
 
             ejercicios.forEach(ej => {
-                // Color según categoría
                 let colorCat = 'bg-slate-500';
                 if(ej.categoria === 'Táctico') colorCat = 'bg-blue-500';
                 if(ej.categoria === 'Físico') colorCat = 'bg-emerald-500';
@@ -313,18 +279,16 @@
                 `;
                 contenedorEjercicios.appendChild(card);
 
-                // CSS trick para mostrar botón borrar al pasar el ratón (añadido en la clase de la tarjeta global)
                 card.addEventListener('mouseenter', () => card.querySelector('.btn-delete').classList.remove('opacity-0'));
                 card.addEventListener('mouseleave', () => card.querySelector('.btn-delete').classList.add('opacity-0'));
             });
 
-            // Asignar eventos de borrado
             document.querySelectorAll('.btn-delete').forEach(btn => {
                 btn.addEventListener('click', async (e) => {
                     const id = e.currentTarget.getAttribute('data-id');
                     if (confirm('¿Eliminar este ejercicio?')) {
                         if (dbEnLinea) {
-                            await deleteDoc(doc(db, `artifacts/${appId}/public/data/ejercicios`, id));
+                            await deleteDoc(doc(db, 'ejercicios', id));
                             mostrarNotificacion("Ejercicio eliminado");
                         } else {
                             ejerciciosLocales = ejerciciosLocales.filter(ej => ej.id !== id);
@@ -337,7 +301,7 @@
         }
 
         // ==========================================
-        // 3. UI Y NAVEGACIÓN
+        // UI Y NAVEGACIÓN
         // ==========================================
         const modal = document.getElementById('modal-ejercicio');
         const toggleModal = () => modal.classList.toggle('hidden');
@@ -346,7 +310,6 @@
         document.getElementById('btn-close-modal').addEventListener('click', toggleModal);
         document.getElementById('btn-cancel-modal').addEventListener('click', toggleModal);
 
-        // Lógica de Guardado
         document.getElementById('btn-save-modal').addEventListener('click', async () => {
             const nombre = document.getElementById('input-nombre').value;
             const categoria = document.getElementById('input-categoria').value;
@@ -363,15 +326,13 @@
                 fechaCreacion: new Date().toISOString()
             };
 
-            // Cambiar texto de botón para UX
             const btn = document.getElementById('btn-save-modal');
             const textoOriginal = btn.innerText;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
 
             if (dbEnLinea) {
                 try {
-                    const path = `artifacts/${appId}/public/data/ejercicios`;
-                    await addDoc(collection(db, path), nuevoEj);
+                    await addDoc(collection(db, 'ejercicios'), nuevoEj);
                     mostrarNotificacion("Guardado en la Nube");
                 } catch (error) {
                     console.error("Error al guardar:", error);
@@ -384,13 +345,11 @@
                 mostrarNotificacion("Guardado Localmente");
             }
 
-            // Reset UI
             document.getElementById('form-ejercicio').reset();
             btn.innerText = textoOriginal;
             toggleModal();
         });
 
-        // Notificaciones visuales tipo Toast
         function mostrarNotificacion(mensaje, esError = false) {
             const alerta = document.createElement('div');
             alerta.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-xl fade-in z-50 ${esError ? 'bg-red-500' : 'bg-slate-800'}`;
@@ -399,7 +358,6 @@
             setTimeout(() => alerta.remove(), 3000);
         }
 
-        // Navegación del Menú Lateral
         const navLinks = document.querySelectorAll('.nav-link');
         const views = document.querySelectorAll('.app-view');
         const headerTitle = document.getElementById('header-title');
@@ -424,9 +382,8 @@
         });
 
         // ==========================================
-        // 4. CHART.JS (Gráfica de rendimiento)
+        // CHART.JS
         // ==========================================
-        // Utilidad obligatoria para romper textos largos en las etiquetas
         const wrapLabel = (label, maxChars = 16) => {
             const words = label.split(' ');
             const lines = [];
@@ -451,16 +408,16 @@
             data: {
                 labels: etiquetas,
                 datasets: [{
-                    label: 'Distancia Recorrida (Km promedio)',
+                    label: 'Distancia (Km)',
                     data: [4.2, 7.8, 8.5, 5.1, 3.2],
-                    backgroundColor: 'rgba(16, 185, 129, 0.8)', // Emerald 500
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)',
                     borderRadius: 4
                 },
                 {
                     type: 'line',
-                    label: 'Carga Subjetiva (RPE 1-10)',
+                    label: 'Carga (RPE)',
                     data: [3, 8, 7, 5, 2],
-                    borderColor: 'rgba(59, 130, 246, 1)', // Blue 500
+                    borderColor: 'rgba(59, 130, 246, 1)',
                     backgroundColor: 'rgba(59, 130, 246, 0.1)',
                     borderWidth: 2,
                     tension: 0.3,
@@ -477,7 +434,6 @@
                 plugins: {
                     legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
                     tooltip: {
-                        // Configuración obligatoria para leer los arrays de texto
                         callbacks: {
                             title: function(tooltipItems) {
                                 const item = tooltipItems[0];
@@ -489,7 +445,6 @@
                 }
             }
         });
-
     </script>
 </body>
 </html>
