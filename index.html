@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FútbolApp - Gestión Deportiva</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome (Iconos sin SVG) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Contenedor estricto para que la gráfica no desborde */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 flex h-screen overflow-hidden">
+
+    <!-- BARRA LATERAL (SIDEBAR) -->
+    <aside class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+            <i class="fa-solid fa-futbol text-emerald-400 text-xl mr-3"></i>
+            <span class="text-white font-bold text-lg tracking-wide">FútbolApp</span>
+        </div>
+
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1" id="nav-menu">
+                <li>
+                    <a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors">
+                        <i class="fa-solid fa-house w-6 text-center mr-2"></i>
+                        <span class="font-medium">Inicio</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors">
+                        <i class="fa-solid fa-users w-6 text-center mr-2"></i>
+                        <span class="font-medium">Plantilla</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors">
+                        <i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i>
+                        <span class="font-medium">Ejercicios</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="flex-1 flex flex-col overflow-hidden relative">
+        
+        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10 flex-shrink-0">
+            <button class="md:hidden text-slate-500 hover:text-slate-800">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+            <h2 id="header-title" class="text-xl font-semibold text-slate-800 hidden md:block">Panel de Control</h2>
+            
+            <div class="flex items-center space-x-4">
+                <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando...
+                </span>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-50 relative">
+            
+            <!-- VISTA 1: DASHBOARD -->
+            <div id="view-dashboard" class="app-view fade-in">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- Tarjetas (Mantenemos las estáticas del módulo anterior por ahora) -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-slate-500 text-sm font-medium uppercase">Próximo Entreno</h3>
+                            <div class="p-2 bg-blue-50 rounded-lg text-blue-500"><i class="fa-regular fa-calendar-check"></i></div>
+                        </div>
+                        <p class="text-2xl font-bold text-slate-800">Hoy, 19:30h</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-slate-500 text-sm font-medium uppercase">Disponibilidad</h3>
+                            <div class="p-2 bg-emerald-50 rounded-lg text-emerald-500"><i class="fa-solid fa-shirt"></i></div>
+                        </div>
+                        <p class="text-2xl font-bold text-slate-800">18 <span class="text-lg text-slate-400">/ 22</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-slate-500 text-sm font-medium uppercase">Objetivo Semanal</h3>
+                            <div class="p-2 bg-purple-50 rounded-lg text-purple-500"><i class="fa-solid fa-bullseye"></i></div>
+                        </div>
+                        <p class="text-lg font-bold text-slate-800">Presión Alta (65%)</p>
+                    </div>
+                </div>
+
+                <!-- CONTENEDOR DE GRÁFICA CHART.JS -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-bold text-slate-800">Carga Física Semanal (GPS)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="rendimientoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA 2: EJERCICIOS (CONECTADO A BASE DE DATOS) -->
+            <div id="view-ejercicios" class="app-view hidden fade-in">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <p class="text-slate-500 text-sm">Biblioteca dinámica guardada en la base de datos.</p>
+                    <button id="btn-open-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm">
+                        <i class="fa-solid fa-plus mr-2"></i> Nuevo Ejercicio
+                    </button>
+                </div>
+
+                <!-- Grid donde se inyectarán los ejercicios desde Firebase -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-ejercicios-container">
+                    <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
+                        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
+                        <p>Cargando ejercicios...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-plantilla" class="app-view hidden fade-in text-center py-20 text-slate-500">
+                <i class="fa-solid fa-users text-5xl mb-4 text-slate-300"></i>
+                <h3 class="text-xl font-bold text-slate-700">Módulo de Plantilla (Próxima Fase)</h3>
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: AÑADIR NUEVO EJERCICIO -->
+    <div id="modal-ejercicio" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-lg text-slate-800">Guardar Nuevo Ejercicio</h3>
+                <button id="btn-close-modal" class="text-slate-400 hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-ejercicio" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                        <input type="text" id="input-nombre" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Ej: Posesión 3 zonas">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
+                            <select id="input-categoria" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                <option value="Táctico">Táctico</option>
+                                <option value="Físico">Físico</option>
+                                <option value="Técnico">Técnico</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Minutos</label>
+                            <input type="number" id="input-duracion" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="15">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+                        <textarea id="input-descripcion" rows="3" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Objetivos del ejercicio..."></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
+                <button id="btn-cancel-modal" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+                <button id="btn-save-modal" class="px-4 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 rounded-lg transition-colors shadow-sm">
+                    Guardar Ejercicio
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT PRINCIPAL (TIPO MODULE PARA PERMITIR IMPORTS DE FIREBASE) -->
+    <script type="module">
+        // ==========================================
+        // 1. CONFIGURACIÓN DE FIREBASE (NUBE)
+        // ==========================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variables de entorno proporcionadas por Google Canvas
+        const isCanvasEnv = typeof __firebase_config !== 'undefined';
+        const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'futbol-app-local';
+        
+        let db, auth;
+        let dbEnLinea = false;
+        
+        // Memoria local de respaldo si no estamos en entorno Canvas/Firebase configurado
+        let ejerciciosLocales = [
+            { id: 'mock1', nombre: 'Rondos 4v2', categoria: 'Táctico', duracion: 15, descripcion: 'Posesión en espacio reducido.' },
+            { id: 'mock2', nombre: 'Circuito Fuerza', categoria: 'Físico', duracion: 20, descripcion: 'Fuerza explosiva 6 postas.' }
+        ];
+
+        const statusBadge = document.getElementById('db-status');
+
+        if (isCanvasEnv && firebaseConfig) {
+            // Inicializar Firebase
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+
+            // Autenticación (Requerida por reglas de seguridad)
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Error de Auth:", error);
+                    usarModoLocal();
+                }
+            };
+
+            initAuth();
+
+            // Escuchar estado del usuario
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    dbEnLinea = true;
+                    statusBadge.innerHTML = '<i class="fa-solid fa-cloud text-emerald-500 mr-1"></i> Nube Conectada';
+                    statusBadge.classList.replace('text-slate-500', 'text-emerald-700');
+                    statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
+                    iniciarEscuchaEjercicios();
+                }
+            });
+        } else {
+            // Si el usuario lo abre en su PC sin configurar, usamos el modo local para que no falle.
+            usarModoLocal();
+        }
+
+        function usarModoLocal() {
+            dbEnLinea = false;
+            statusBadge.innerHTML = '<i class="fa-solid fa-hard-drive text-amber-500 mr-1"></i> Modo Local';
+            statusBadge.classList.replace('text-slate-500', 'text-amber-700');
+            statusBadge.classList.replace('bg-slate-100', 'bg-amber-100');
+            renderizarEjercicios(ejerciciosLocales);
+        }
+
+        // ==========================================
+        // 2. LÓGICA DE BASE DE DATOS (CRUD)
+        // ==========================================
+        const contenedorEjercicios = document.getElementById('lista-ejercicios-container');
+
+        // Leer datos en tiempo real
+        function iniciarEscuchaEjercicios() {
+            const path = `artifacts/${appId}/public/data/ejercicios`;
+            const ref = collection(db, path);
+            
+            onSnapshot(ref, (snapshot) => {
+                const ejercicios = [];
+                snapshot.forEach((doc) => {
+                    ejercicios.push({ id: doc.id, ...doc.data() });
+                });
+                renderizarEjercicios(ejercicios);
+            }, (error) => {
+                console.error("Error leyendo Firebase:", error);
+                mostrarNotificacion("Error al leer la base de datos", true);
+            });
+        }
+
+        // Renderizar Tarjetas HTML
+        function renderizarEjercicios(ejercicios) {
+            contenedorEjercicios.innerHTML = '';
+            
+            if (ejercicios.length === 0) {
+                contenedorEjercicios.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
+                        <i class="fa-solid fa-box-open text-4xl mb-3 text-slate-300"></i>
+                        <p>No hay ejercicios guardados. ¡Crea el primero!</p>
+                    </div>`;
+                return;
+            }
+
+            ejercicios.forEach(ej => {
+                // Color según categoría
+                let colorCat = 'bg-slate-500';
+                if(ej.categoria === 'Táctico') colorCat = 'bg-blue-500';
+                if(ej.categoria === 'Físico') colorCat = 'bg-emerald-500';
+                if(ej.categoria === 'Técnico') colorCat = 'bg-amber-500';
+
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all relative';
+                card.innerHTML = `
+                    <button class="btn-delete absolute top-2 left-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors z-10 opacity-0 hover:opacity-100 focus:opacity-100" data-id="${ej.id}">
+                        <i class="fa-solid fa-trash-can text-sm"></i>
+                    </button>
+                    <div class="h-24 bg-slate-800 relative flex items-center justify-center group">
+                        <i class="fa-solid fa-pen-to-square text-3xl text-slate-600"></i>
+                        <span class="absolute top-2 right-2 ${colorCat} text-white text-xs font-bold px-2 py-1 rounded shadow-sm">${ej.categoria}</span>
+                    </div>
+                    <div class="p-5">
+                        <h4 class="font-bold text-lg text-slate-800 mb-1 truncate">${ej.nombre}</h4>
+                        <p class="text-sm text-slate-500 mb-4 line-clamp-2 h-10">${ej.descripcion}</p>
+                        <div class="flex items-center justify-between text-xs text-slate-400 font-medium border-t border-slate-100 pt-3">
+                            <span><i class="fa-regular fa-clock mr-1"></i> ${ej.duracion} min</span>
+                        </div>
+                    </div>
+                `;
+                contenedorEjercicios.appendChild(card);
+
+                // CSS trick para mostrar botón borrar al pasar el ratón (añadido en la clase de la tarjeta global)
+                card.addEventListener('mouseenter', () => card.querySelector('.btn-delete').classList.remove('opacity-0'));
+                card.addEventListener('mouseleave', () => card.querySelector('.btn-delete').classList.add('opacity-0'));
+            });
+
+            // Asignar eventos de borrado
+            document.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const id = e.currentTarget.getAttribute('data-id');
+                    if (confirm('¿Eliminar este ejercicio?')) {
+                        if (dbEnLinea) {
+                            await deleteDoc(doc(db, `artifacts/${appId}/public/data/ejercicios`, id));
+                            mostrarNotificacion("Ejercicio eliminado");
+                        } else {
+                            ejerciciosLocales = ejerciciosLocales.filter(ej => ej.id !== id);
+                            renderizarEjercicios(ejerciciosLocales);
+                            mostrarNotificacion("Eliminado (Modo Local)");
+                        }
+                    }
+                });
+            });
+        }
+
+        // ==========================================
+        // 3. UI Y NAVEGACIÓN
+        // ==========================================
+        const modal = document.getElementById('modal-ejercicio');
+        const toggleModal = () => modal.classList.toggle('hidden');
+
+        document.getElementById('btn-open-modal').addEventListener('click', toggleModal);
+        document.getElementById('btn-close-modal').addEventListener('click', toggleModal);
+        document.getElementById('btn-cancel-modal').addEventListener('click', toggleModal);
+
+        // Lógica de Guardado
+        document.getElementById('btn-save-modal').addEventListener('click', async () => {
+            const nombre = document.getElementById('input-nombre').value;
+            const categoria = document.getElementById('input-categoria').value;
+            const duracion = document.getElementById('input-duracion').value;
+            const descripcion = document.getElementById('input-descripcion').value;
+
+            if (!nombre || !duracion || !descripcion) {
+                alert("Por favor, rellena todos los campos");
+                return;
+            }
+
+            const nuevoEj = {
+                nombre, categoria, duracion: parseInt(duracion), descripcion,
+                fechaCreacion: new Date().toISOString()
+            };
+
+            // Cambiar texto de botón para UX
+            const btn = document.getElementById('btn-save-modal');
+            const textoOriginal = btn.innerText;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+            if (dbEnLinea) {
+                try {
+                    const path = `artifacts/${appId}/public/data/ejercicios`;
+                    await addDoc(collection(db, path), nuevoEj);
+                    mostrarNotificacion("Guardado en la Nube");
+                } catch (error) {
+                    console.error("Error al guardar:", error);
+                    mostrarNotificacion("Error al guardar", true);
+                }
+            } else {
+                nuevoEj.id = 'loc_' + Date.now();
+                ejerciciosLocales.push(nuevoEj);
+                renderizarEjercicios(ejerciciosLocales);
+                mostrarNotificacion("Guardado Localmente");
+            }
+
+            // Reset UI
+            document.getElementById('form-ejercicio').reset();
+            btn.innerText = textoOriginal;
+            toggleModal();
+        });
+
+        // Notificaciones visuales tipo Toast
+        function mostrarNotificacion(mensaje, esError = false) {
+            const alerta = document.createElement('div');
+            alerta.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-xl fade-in z-50 ${esError ? 'bg-red-500' : 'bg-slate-800'}`;
+            alerta.innerHTML = `<i class="fa-solid ${esError ? 'fa-triangle-exclamation' : 'fa-check-circle'} mr-2"></i> ${mensaje}`;
+            document.body.appendChild(alerta);
+            setTimeout(() => alerta.remove(), 3000);
+        }
+
+        // Navegación del Menú Lateral
+        const navLinks = document.querySelectorAll('.nav-link');
+        const views = document.querySelectorAll('.app-view');
+        const headerTitle = document.getElementById('header-title');
+        
+        const titulos = {
+            'view-dashboard': 'Panel de Control',
+            'view-plantilla': 'Plantilla',
+            'view-ejercicios': 'Biblioteca de Ejercicios'
+        };
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                navLinks.forEach(l => l.className = 'nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors');
+                link.className = 'nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors';
+                
+                const targetId = link.getAttribute('data-target');
+                views.forEach(v => v.classList.add('hidden'));
+                document.getElementById(targetId).classList.remove('hidden');
+                headerTitle.textContent = titulos[targetId];
+            });
+        });
+
+        // ==========================================
+        // 4. CHART.JS (Gráfica de rendimiento)
+        // ==========================================
+        // Utilidad obligatoria para romper textos largos en las etiquetas
+        const wrapLabel = (label, maxChars = 16) => {
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > maxChars) {
+                    if (currentLine.length > 0) lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine.trim().length > 0) lines.push(currentLine.trim());
+            return lines;
+        };
+
+        const ctx = document.getElementById('rendimientoChart').getContext('2d');
+        const etiquetas = ['Lunes (Recuperación)', 'Martes (Fuerza)', 'Miércoles (Resistencia)', 'Jueves (Velocidad)', 'Viernes (Activación)'].map(l => wrapLabel(l));
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: etiquetas,
+                datasets: [{
+                    label: 'Distancia Recorrida (Km promedio)',
+                    data: [4.2, 7.8, 8.5, 5.1, 3.2],
+                    backgroundColor: 'rgba(16, 185, 129, 0.8)', // Emerald 500
+                    borderRadius: 4
+                },
+                {
+                    type: 'line',
+                    label: 'Carga Subjetiva (RPE 1-10)',
+                    data: [3, 8, 7, 5, 2],
+                    borderColor: 'rgba(59, 130, 246, 1)', // Blue 500
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                    x: { grid: { display: false } }
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                        // Configuración obligatoria para leer los arrays de texto
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                let label = item.chart.data.labels[item.dataIndex];
+                                return Array.isArray(label) ? label.join(' ') : label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
