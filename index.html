@@ -7,602 +7,207 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .chart-container {
-            position: relative;
-            width: 100%;
-            height: 300px;
-        }
+        .chart-container { position: relative; width: 100%; height: 300px; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800 flex h-screen overflow-hidden">
 
     <!-- BARRA LATERAL (SIDEBAR) -->
-    <aside class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
+    <aside id="sidebar" class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
         <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
             <i class="fa-solid fa-futbol text-emerald-400 text-xl mr-3"></i>
             <span class="text-white font-bold text-lg tracking-wide">FútbolApp</span>
         </div>
-
         <nav class="flex-1 overflow-y-auto py-4">
             <ul class="space-y-1" id="nav-menu">
-                <li>
-                    <a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors">
-                        <i class="fa-solid fa-house w-6 text-center mr-2"></i>
-                        <span class="font-medium">Inicio</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors">
-                        <i class="fa-solid fa-users w-6 text-center mr-2"></i>
-                        <span class="font-medium">Plantilla</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors">
-                        <i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i>
-                        <span class="font-medium">Ejercicios</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors">
-                        <i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i>
-                        <span class="font-medium">Sesiones</span>
-                    </a>
-                </li>
+                <li><a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-house w-6 text-center mr-2"></i><span class="font-medium">Inicio</span></a></li>
+                <li><a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-users w-6 text-center mr-2"></i><span class="font-medium">Plantilla</span></a></li>
+                <li><a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i><span class="font-medium">Ejercicios</span></a></li>
+                <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium">Sesiones</span></a></li>
             </ul>
         </nav>
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
     <div class="flex-1 flex flex-col overflow-hidden relative">
-        
         <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10 flex-shrink-0">
-            <button class="md:hidden text-slate-500 hover:text-slate-800">
-                <i class="fa-solid fa-bars text-xl"></i>
-            </button>
+            <button id="btn-mobile-menu" class="md:hidden text-slate-500 hover:text-slate-800"><i class="fa-solid fa-bars text-xl"></i></button>
             <h2 id="header-title" class="text-xl font-semibold text-slate-800 hidden md:block">Panel de Control</h2>
-            
             <div class="flex items-center space-x-4">
-                <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500">
-                    <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando BD...
-                </span>
+                <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando BD...</span>
             </div>
         </header>
 
         <main class="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-50 relative">
             
-            <!-- ========================================== -->
             <!-- VISTA 1: DASHBOARD -->
-            <!-- ========================================== -->
             <div id="view-dashboard" class="app-view fade-in">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-slate-500 text-sm font-medium uppercase">Próximo Entreno</h3>
-                            <div class="p-2 bg-blue-50 rounded-lg text-blue-500"><i class="fa-regular fa-calendar-check"></i></div>
-                        </div>
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Próximo Entreno</h3><div class="p-2 bg-blue-50 rounded-lg text-blue-500"><i class="fa-regular fa-calendar-check"></i></div></div>
                         <p class="text-2xl font-bold text-slate-800" id="dash-proximo-entreno">Sin planificar</p>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-slate-500 text-sm font-medium uppercase">Disponibilidad</h3>
-                            <div class="p-2 bg-emerald-50 rounded-lg text-emerald-500"><i class="fa-solid fa-shirt"></i></div>
-                        </div>
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Disponibilidad</h3><div class="p-2 bg-emerald-50 rounded-lg text-emerald-500"><i class="fa-solid fa-shirt"></i></div></div>
                         <p class="text-2xl font-bold text-slate-800" id="contador-disponibles">0 <span class="text-lg text-slate-400">/ 0</span></p>
                     </div>
                     <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-slate-500 text-sm font-medium uppercase">Objetivo Semanal</h3>
-                            <div class="p-2 bg-purple-50 rounded-lg text-purple-500"><i class="fa-solid fa-bullseye"></i></div>
-                        </div>
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Objetivo Semanal</h3><div class="p-2 bg-purple-50 rounded-lg text-purple-500"><i class="fa-solid fa-bullseye"></i></div></div>
                         <p class="text-lg font-bold text-slate-800">Presión Alta (65%)</p>
                     </div>
                 </div>
-
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-bold text-slate-800">Carga Física Semanal (GPS)</h3>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="rendimientoChart"></canvas>
-                    </div>
+                    <div class="flex justify-between items-center mb-6"><h3 class="text-lg font-bold text-slate-800">Carga Física Semanal (GPS)</h3></div>
+                    <div class="chart-container"><canvas id="rendimientoChart"></canvas></div>
                 </div>
             </div>
 
-            <!-- ========================================== -->
             <!-- VISTA 2: PLANTILLA -->
-            <!-- ========================================== -->
             <div id="view-plantilla" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Gestiona los jugadores de tu equipo y su disponibilidad actual.</p>
-                    <button id="btn-open-modal-jugador" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm">
-                        <i class="fa-solid fa-user-plus mr-2"></i> Añadir Jugador
-                    </button>
+                    <p class="text-slate-500 text-sm">Gestiona los jugadores de tu equipo.</p>
+                    <button id="btn-open-modal-jugador" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-user-plus mr-2"></i> Añadir Jugador</button>
                 </div>
-
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6" id="lista-jugadores-container">
-                    <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
-                        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
-                        <p>Cargando plantilla...</p>
-                    </div>
-                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6" id="lista-jugadores-container"></div>
             </div>
 
-            <!-- ========================================== -->
             <!-- VISTA 3: EJERCICIOS -->
-            <!-- ========================================== -->
             <div id="view-ejercicios" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Biblioteca de tareas conectada a tu Base de Datos en tiempo real.</p>
-                    <button id="btn-open-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm">
-                        <i class="fa-solid fa-plus mr-2"></i> Nuevo Ejercicio
-                    </button>
+                    <p class="text-slate-500 text-sm">Biblioteca de tareas de entrenamiento.</p>
+                    <button id="btn-open-modal" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-plus mr-2"></i> Nuevo Ejercicio</button>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-ejercicios-container">
-                    <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
-                        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
-                        <p>Cargando ejercicios...</p>
-                    </div>
-                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-ejercicios-container"></div>
             </div>
 
-            <!-- ========================================== -->
             <!-- VISTA 4: SESIONES -->
-            <!-- ========================================== -->
             <div id="view-sesiones" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Planifica entrenamientos, selecciona ejercicios y pasa lista.</p>
-                    <button id="btn-open-modal-sesion" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm">
-                        <i class="fa-solid fa-calendar-plus mr-2"></i> Nueva Sesión
-                    </button>
+                    <p class="text-slate-500 text-sm">Planifica entrenamientos.</p>
+                    <button id="btn-open-modal-sesion" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-calendar-plus mr-2"></i> Nueva Sesión</button>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-sesiones-container">
-                    <div class="col-span-full flex flex-col items-center justify-center py-10 text-slate-400">
-                        <i class="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
-                        <p>Cargando sesiones...</p>
-                    </div>
-                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-sesiones-container"></div>
             </div>
-
         </main>
     </div>
 
-    <!-- ========================================== -->
-    <!-- MODALES (FORMULARIOS EMERGENTES) -->
-    <!-- ========================================== -->
-
-    <!-- Modal Ejercicio -->
+    <!-- MODALES -->
     <div id="modal-ejercicio" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="font-bold text-lg text-slate-800">Guardar Nuevo Ejercicio</h3>
-                <button id="btn-close-modal" class="text-slate-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Nuevo Ejercicio</h3><button id="btn-close-modal" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="form-ejercicio" class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                        <input type="text" id="input-nombre" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Categoría</label>
-                            <select id="input-categoria" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                                <option value="Táctico">Táctico</option>
-                                <option value="Físico">Físico</option>
-                                <option value="Técnico">Técnico</option>
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <!-- Campos del formulario -->
+                        <div class="w-full md:w-1/3 space-y-4">
+                            <input type="text" id="input-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
+                            <div class="flex gap-2">
+                                <select id="input-categoria" class="w-1/2 px-3 py-2 border rounded-lg"><option>Táctico</option><option>Físico</option><option>Técnico</option></select>
+                                <input type="number" id="input-duracion" required class="w-1/2 px-3 py-2 border rounded-lg" placeholder="Minutos (ej. 15)">
+                            </div>
+                            <select id="pizarra-fondo" class="w-full px-3 py-2 border rounded-lg text-slate-700 bg-white">
+                                <option value="completo">Pizarra: Campo Completo</option>
+                                <option value="medio">Pizarra: Medio Campo</option>
+                                <option value="area">Pizarra: Área</option>
                             </select>
+                            <textarea id="input-descripcion" rows="5" required class="w-full px-3 py-2 border rounded-lg" placeholder="Descripción"></textarea>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Minutos</label>
-                            <input type="number" id="input-duracion" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        
+                            <!-- Pizarra Táctica -->
+                        <div class="w-full md:w-2/3 flex flex-col h-full">
+                            
+                            <!-- Barra de Herramientas -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                                <div class="flex items-center gap-1 md:gap-2">
+                                    <button type="button" id="tool-player-blue" class="p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Azul"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-player-red" class="p-1.5 md:p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Rojo"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-player-yellow" class="p-1.5 md:p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Amarillo"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-player-black" class="p-1.5 md:p-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Negro"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-balon" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-800 rounded-md flex items-center justify-center border transition-colors" title="Añadir Balón">⚽</button>
+                                    <button type="button" id="tool-cono" class="p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-md flex items-center justify-center transition-colors" title="Añadir Cono"><i class="fa-solid fa-triangle-exclamation"></i></button>
+                                    
+                                    <div class="w-px h-6 bg-slate-300 mx-0.5"></div>
+
+                                    <div class="flex items-center gap-1 bg-white border rounded p-1 mx-0.5" title="Paso de animación">
+                                        <button type="button" id="step-prev" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-minus text-[10px]"></i></button>
+                                        <span id="step-display" class="w-4 md:w-6 text-center font-bold text-slate-800 text-xs md:text-sm">1</span>
+                                        <button type="button" id="step-next" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                    </div>
+                                    
+                                    <div class="w-px h-6 bg-slate-300 mx-0.5 hidden md:block"></div>
+                                    
+                                    <button type="button" id="tool-undo" class="p-1.5 md:p-2 bg-white hover:bg-slate-50 text-slate-600 border rounded-md transition-colors" title="Deshacer (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
+                                    <button type="button" id="tool-borrar" class="p-1.5 md:p-2 bg-white hover:bg-rose-50 text-rose-600 border rounded-md transition-colors" title="Borrar Seleccionado"><i class="fa-solid fa-eraser"></i></button>
+                                    <button type="button" id="tool-limpiar" class="p-1.5 md:p-2 bg-white hover:bg-slate-50 text-slate-600 border rounded-md transition-colors" title="Limpiar Pizarra"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <button type="button" id="tool-play" class="px-3 py-1.5 md:py-2 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm transition-colors font-bold text-sm flex items-center" title="Reproducir Animación">
+                                        <i class="fa-solid fa-play mr-1"></i> <span class="hidden sm:inline">Animación</span>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Lienzo -->
+                            <div id="pizarra-container-wrapper" class="bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center shadow-sm w-full relative overflow-hidden flex-1 group min-h-[350px] md:min-h-[400px]">
+                                <div id="pizarra-container" class="bg-emerald-500 relative flex-shrink-0 origin-center" style="width: 600px; height: 350px;">
+                                    <canvas id="pizarra-canvas" width="600" height="350"></canvas>
+                                </div>
+                                <div class="absolute bottom-2 right-2 flex gap-2 z-10">
+                                    <button type="button" id="tool-play-fullscreen" class="hidden px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors font-bold text-sm items-center" title="Reproducir Animación">
+                                        <i class="fa-solid fa-play mr-1"></i> <span class="hidden sm:inline">Animación</span>
+                                    </button>
+                                    <button type="button" id="tool-fullscreen" class="p-2 aspect-square bg-slate-800/80 hover:bg-slate-900 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors flex items-center justify-center" title="Pantalla Completa">
+                                        <i class="fa-solid fa-expand"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
-                        <textarea id="input-descripcion" rows="3" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
                     </div>
                 </form>
             </div>
-            <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
-                <button id="btn-cancel-modal" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
-                <button id="btn-save-modal" class="px-4 py-2 bg-emerald-600 text-white font-medium hover:bg-emerald-700 rounded-lg transition-colors shadow-sm">Guardar Ejercicio</button>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal" class="px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
+                <button id="btn-save-modal" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm font-medium">Guardar Ejercicio</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Jugador -->
     <div id="modal-jugador" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="font-bold text-lg text-slate-800">Añadir Nuevo Jugador</h3>
-                <button id="btn-close-modal-jugador" class="text-slate-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Añadir Jugador</h3><button id="btn-close-modal-jugador" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="form-jugador" class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Nombre Completo</label>
-                        <input type="text" id="input-jugador-nombre" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Posición</label>
-                            <select id="input-jugador-posicion" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="Portero">Portero</option>
-                                <option value="Defensa">Defensa</option>
-                                <option value="Centrocampista">Centrocampista</option>
-                                <option value="Delantero">Delantero</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Dorsal</label>
-                            <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Estado Físico</label>
-                        <select id="input-jugador-estado" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="Disponible">Disponible (Verde)</option>
-                            <option value="Tocado">Tocado / Duda (Naranja)</option>
-                            <option value="Lesionado">Lesionado (Rojo)</option>
-                        </select>
-                    </div>
+                    <input type="text" id="input-jugador-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
+                    <select id="input-jugador-posicion" class="w-full px-3 py-2 border rounded-lg"><option>Portero</option><option>Defensa</option><option>Centrocampista</option><option>Delantero</option></select>
+                    <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border rounded-lg" placeholder="Dorsal">
+                    <select id="input-jugador-estado" class="w-full px-3 py-2 border rounded-lg"><option value="Disponible">Disponible</option><option value="Tocado">Tocado</option><option value="Lesionado">Lesionado</option></select>
                 </form>
             </div>
-            <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
-                <button id="btn-cancel-modal-jugador" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
-                <button id="btn-save-modal-jugador" class="px-4 py-2 bg-blue-600 text-white font-medium hover:bg-blue-700 rounded-lg transition-colors shadow-sm">Guardar Jugador</button>
-            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-jugador" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-jugador" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button></div>
         </div>
     </div>
 
-    <!-- Modal Sesión -->
     <div id="modal-sesion" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <h3 class="font-bold text-lg text-slate-800">Planificar Sesión</h3>
-                <button id="btn-close-modal-sesion" class="text-slate-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-            </div>
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Planificar Sesión</h3><button id="btn-close-modal-sesion" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="form-sesion" class="space-y-6">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
-                            <input type="date" id="input-sesion-fecha" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Objetivo / Título</label>
-                            <input type="text" id="input-sesion-objetivo" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Ej: Posesión y transiciones">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Seleccionar Ejercicios</label>
-                        <div id="sesion-ejercicios-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-slate-50 shadow-inner">
-                            <!-- JS fill -->
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Asistencia (Jugadores)</label>
-                        <div id="sesion-jugadores-list" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-3 border border-slate-200 rounded-lg bg-slate-50 shadow-inner">
-                            <!-- JS fill -->
-                        </div>
-                    </div>
+                    <input type="date" id="input-sesion-fecha" required class="w-full px-3 py-2 border rounded-lg">
+                    <input type="text" id="input-sesion-objetivo" required class="w-full px-3 py-2 border rounded-lg" placeholder="Objetivo">
+                    <div><label class="block mb-2 text-sm font-bold">Ejercicios</label><div id="sesion-ejercicios-list" class="grid grid-cols-2 gap-2 p-3 border rounded-lg bg-slate-50"></div></div>
+                    <div><label class="block mb-2 text-sm font-bold">Asistencia</label><div id="sesion-jugadores-list" class="grid grid-cols-3 gap-2 p-3 border rounded-lg bg-slate-50"></div></div>
                 </form>
             </div>
-            <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-3">
-                <button id="btn-cancel-modal-sesion" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
-                <button id="btn-save-modal-sesion" class="px-4 py-2 bg-purple-600 text-white font-medium hover:bg-purple-700 rounded-lg transition-colors shadow-sm">Guardar Sesión</button>
-            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-sesion" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-sesion" class="px-4 py-2 bg-purple-600 text-white rounded-lg">Guardar</button></div>
         </div>
     </div>
 
-
-    <!-- ========================================== -->
-    <!-- SCRIPT PRINCIPAL CON FIREBASE -->
-    <!-- ========================================== -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // TUS CLAVES REALES DE FIREBASE
-        const firebaseConfig = {
-            apiKey: "AIzaSyBWv7cVvQZtXMWMOYhhodfdt_6fstImXK4",
-            authDomain: "futbol-tracker-app.firebaseapp.com",
-            projectId: "futbol-tracker-app",
-            storageBucket: "futbol-tracker-app.firebasestorage.app",
-            messagingSenderId: "272883171358",
-            appId: "1:272883171358:web:c3e276ab3376923a912e0f"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const statusBadge = document.getElementById('db-status');
-
-        let dbEnLinea = false;
-        
-        // Variables globales para cruzar datos
-        let todosLosEjercicios = []; 
-        let todosLosJugadores = [];
-
-        // Autenticación
-        signInAnonymously(auth).then(() => {
-            dbEnLinea = true;
-            statusBadge.innerHTML = '<i class="fa-solid fa-cloud text-emerald-500 mr-1"></i> Nube Conectada';
-            statusBadge.classList.replace('text-slate-500', 'text-emerald-700');
-            statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
-            
-            // Iniciar todos los listeners
-            iniciarEscuchaEjercicios();
-            iniciarEscuchaJugadores();
-            iniciarEscuchaSesiones();
-        }).catch((error) => {
-            console.error("Error Firebase:", error);
-            statusBadge.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500 mr-1"></i> Error Auth';
-        });
-
-        // ==========================================
-        // 1. LÓGICA DE EJERCICIOS
-        // ==========================================
-        const contenedorEjercicios = document.getElementById('lista-ejercicios-container');
-
-        function iniciarEscuchaEjercicios() {
-            if (!dbEnLinea) return;
-            onSnapshot(collection(db, 'ejercicios'), (snapshot) => {
-                const ejercicios = [];
-                snapshot.forEach((doc) => ejercicios.push({ id: doc.id, ...doc.data() }));
-                todosLosEjercicios = ejercicios;
-                renderizarEjercicios(ejercicios);
-            });
-        }
-
-        function renderizarEjercicios(ejercicios) {
-            contenedorEjercicios.innerHTML = '';
-            if (ejercicios.length === 0) {
-                contenedorEjercicios.innerHTML = `<div class="col-span-full py-10 text-slate-400 text-center"><p>No hay ejercicios.</p></div>`;
-                return;
-            }
-
-            ejercicios.forEach(ej => {
-                let colorCat = ej.categoria === 'Táctico' ? 'bg-blue-500' : (ej.categoria === 'Físico' ? 'bg-emerald-500' : 'bg-amber-500');
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden relative group';
-                card.innerHTML = `
-                    <button class="btn-delete absolute top-2 left-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 z-10" data-id="${ej.id}"><i class="fa-solid fa-trash-can text-sm"></i></button>
-                    <div class="h-24 bg-slate-800 relative flex items-center justify-center"><i class="fa-solid fa-pen-to-square text-3xl text-slate-600"></i><span class="absolute top-2 right-2 ${colorCat} text-white text-xs font-bold px-2 py-1 rounded">${ej.categoria}</span></div>
-                    <div class="p-5">
-                        <h4 class="font-bold text-lg text-slate-800 mb-1 truncate">${ej.nombre}</h4>
-                        <p class="text-sm text-slate-500 mb-4 line-clamp-2 h-10">${ej.descripcion}</p>
-                        <div class="text-xs text-slate-400 font-medium border-t border-slate-100 pt-3"><i class="fa-regular fa-clock mr-1"></i> ${ej.duracion} min</div>
-                    </div>
-                `;
-                contenedorEjercicios.appendChild(card);
-            });
-
-            document.querySelectorAll('.btn-delete').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    if (confirm('¿Eliminar?')) await deleteDoc(doc(db, 'ejercicios', e.currentTarget.getAttribute('data-id')));
-                });
-            });
-        }
-
-        // ==========================================
-        // 2. LÓGICA DE JUGADORES
-        // ==========================================
-        const contenedorJugadores = document.getElementById('lista-jugadores-container');
-
-        function iniciarEscuchaJugadores() {
-            if (!dbEnLinea) return;
-            onSnapshot(collection(db, 'jugadores'), (snapshot) => {
-                const jugadores = [];
-                snapshot.forEach((doc) => jugadores.push({ id: doc.id, ...doc.data() }));
-                jugadores.sort((a, b) => a.dorsal - b.dorsal);
-                todosLosJugadores = jugadores;
-                renderizarJugadores(jugadores);
-            });
-        }
-
-        function renderizarJugadores(jugadores) {
-            contenedorJugadores.innerHTML = '';
-            const contadorDisp = document.getElementById('contador-disponibles');
-            
-            if (jugadores.length === 0) {
-                contenedorJugadores.innerHTML = `<div class="col-span-full py-10 text-slate-400 text-center"><p>No hay jugadores.</p></div>`;
-                if (contadorDisp) contadorDisp.innerHTML = `0 <span class="text-lg text-slate-400">/ 0</span>`;
-                return;
-            }
-
-            if (contadorDisp) {
-                const disponibles = jugadores.filter(j => j.estado === 'Disponible').length;
-                contadorDisp.innerHTML = `${disponibles} <span class="text-lg text-slate-400">/ ${jugadores.length}</span>`;
-            }
-
-            jugadores.forEach(jugador => {
-                let colorEstado = jugador.estado === 'Tocado' ? 'bg-amber-500' : (jugador.estado === 'Lesionado' ? 'bg-red-500' : 'bg-emerald-500');
-                let iconEstado = jugador.estado === 'Tocado' ? 'fa-triangle-exclamation' : (jugador.estado === 'Lesionado' ? 'fa-truck-medical' : 'fa-check');
-
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-slate-100 p-5 flex flex-col items-center text-center relative group';
-                card.innerHTML = `
-                    <button class="btn-delete-jugador absolute top-2 right-2 w-8 h-8 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 z-10" data-id="${jugador.id}"><i class="fa-solid fa-trash-can text-sm"></i></button>
-                    <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-3xl mb-3 relative border-4 border-white shadow-sm">
-                        <i class="fa-solid fa-user"></i>
-                        <div class="absolute -bottom-1 -right-1 w-6 h-6 ${colorEstado} rounded-full border-2 border-white flex items-center justify-center text-white text-[10px]"><i class="fa-solid ${iconEstado}"></i></div>
-                    </div>
-                    <div class="text-xs font-bold text-slate-400 mb-1">#${jugador.dorsal}</div>
-                    <h4 class="font-bold text-slate-800 leading-tight mb-1 line-clamp-1 w-full">${jugador.nombre}</h4>
-                    <p class="text-xs text-blue-600 font-bold uppercase tracking-wider">${jugador.posicion}</p>
-                `;
-                contenedorJugadores.appendChild(card);
-            });
-
-            document.querySelectorAll('.btn-delete-jugador').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    if (confirm('¿Eliminar jugador?')) await deleteDoc(doc(db, 'jugadores', e.currentTarget.getAttribute('data-id')));
-                });
-            });
-        }
-
-        // ==========================================
-        // 3. LÓGICA DE SESIONES
-        // ==========================================
-        const contenedorSesiones = document.getElementById('lista-sesiones-container');
-
-        function iniciarEscuchaSesiones() {
-            if (!dbEnLinea) return;
-            onSnapshot(collection(db, 'sesiones'), (snapshot) => {
-                const sesiones = [];
-                snapshot.forEach((doc) => sesiones.push({ id: doc.id, ...doc.data() }));
-                sesiones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-                renderizarSesiones(sesiones);
-                
-                // Actualizar Dashboard con el próximo entreno
-                const dashEntreno = document.getElementById('dash-proximo-entreno');
-                if (sesiones.length > 0 && dashEntreno) {
-                    dashEntreno.innerText = sesiones[0].fecha; // Mostrará la fecha del último creado
-                } else if(dashEntreno) {
-                    dashEntreno.innerText = "Sin planificar";
-                }
-            });
-        }
-
-        function renderizarSesiones(sesiones) {
-            contenedorSesiones.innerHTML = '';
-            if (sesiones.length === 0) {
-                contenedorSesiones.innerHTML = `<div class="col-span-full py-10 text-slate-400 text-center"><p>No hay sesiones.</p></div>`;
-                return;
-            }
-
-            sesiones.forEach(sesion => {
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-sm border border-slate-100 p-5 relative flex flex-col group';
-                card.innerHTML = `
-                    <button class="btn-delete-sesion absolute top-2 right-2 w-8 h-8 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 z-10" data-id="${sesion.id}"><i class="fa-solid fa-trash-can text-sm"></i></button>
-                    <div class="flex items-center text-purple-600 mb-2"><i class="fa-regular fa-calendar text-xl mr-2"></i><span class="font-bold text-slate-700">${sesion.fecha}</span></div>
-                    <h4 class="font-bold text-lg text-slate-800 mb-2 leading-tight">${sesion.objetivo}</h4>
-                    <div class="flex gap-4 text-sm text-slate-500 mt-auto border-t border-slate-100 pt-3">
-                        <div title="Ejercicios"><i class="fa-solid fa-clipboard-list mr-1"></i> ${sesion.ejercicios ? sesion.ejercicios.length : 0}</div>
-                        <div title="Asistencia"><i class="fa-solid fa-users mr-1"></i> ${sesion.asistencia ? sesion.asistencia.length : 0}</div>
-                    </div>
-                `;
-                contenedorSesiones.appendChild(card);
-            });
-
-            document.querySelectorAll('.btn-delete-sesion').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    if (confirm('¿Eliminar sesión?')) await deleteDoc(doc(db, 'sesiones', e.currentTarget.getAttribute('data-id')));
-                });
-            });
-        }
-
-        // ==========================================
-        // 4. CONTROLADOR DE INTERFAZ (UI)
-        // ==========================================
-        function mostrarNotificacion(mensaje, esError = false) {
-            const alerta = document.createElement('div');
-            alerta.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-xl fade-in z-50 ${esError ? 'bg-red-500' : 'bg-slate-800'}`;
-            alerta.innerHTML = `<i class="fa-solid ${esError ? 'fa-triangle-exclamation' : 'fa-check-circle'} mr-2"></i> ${mensaje}`;
-            document.body.appendChild(alerta);
-            setTimeout(() => alerta.remove(), 3000);
-        }
-
-        // Navegación Sidebar
-        const navLinks = document.querySelectorAll('.nav-link');
-        const views = document.querySelectorAll('.app-view');
-        const headerTitle = document.getElementById('header-title');
-        const titulos = { 'view-dashboard': 'Panel de Control', 'view-plantilla': 'Plantilla', 'view-ejercicios': 'Ejercicios', 'view-sesiones': 'Sesiones' };
-
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                navLinks.forEach(l => l.className = 'nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors');
-                link.className = 'nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors';
-                const targetId = link.getAttribute('data-target');
-                views.forEach(v => v.classList.add('hidden'));
-                document.getElementById(targetId).classList.remove('hidden');
-                headerTitle.textContent = titulos[targetId];
-            });
-        });
-
-        // Eventos Modales Genéricos
-        const bindModal = (idModal, idBtnOpen, idBtnClose, idBtnCancel, funcExtraOpen = null) => {
-            const modal = document.getElementById(idModal);
-            const openModal = () => { if(funcExtraOpen) funcExtraOpen(); modal.classList.remove('hidden'); };
-            const closeModal = () => modal.classList.add('hidden');
-            document.getElementById(idBtnOpen).addEventListener('click', openModal);
-            document.getElementById(idBtnClose).addEventListener('click', closeModal);
-            document.getElementById(idBtnCancel).addEventListener('click', closeModal);
-            return closeModal;
-        };
-
-        // --- Ejercicio Modal ---
-        const closeModEj = bindModal('modal-ejercicio', 'btn-open-modal', 'btn-close-modal', 'btn-cancel-modal');
-        document.getElementById('btn-save-modal').addEventListener('click', async () => {
-            const data = {
-                nombre: document.getElementById('input-nombre').value,
-                categoria: document.getElementById('input-categoria').value,
-                duracion: parseInt(document.getElementById('input-duracion').value),
-                descripcion: document.getElementById('input-descripcion').value
-            };
-            if (!data.nombre) return alert("Rellena el nombre");
-            try { await addDoc(collection(db, 'ejercicios'), data); mostrarNotificacion("Guardado"); document.getElementById('form-ejercicio').reset(); closeModEj(); } catch(e){ mostrarNotificacion("Error", true); }
-        });
-
-        // --- Jugador Modal ---
-        const closeModJug = bindModal('modal-jugador', 'btn-open-modal-jugador', 'btn-close-modal-jugador', 'btn-cancel-modal-jugador');
-        document.getElementById('btn-save-modal-jugador').addEventListener('click', async () => {
-            const data = {
-                nombre: document.getElementById('input-jugador-nombre').value,
-                posicion: document.getElementById('input-jugador-posicion').value,
-                dorsal: parseInt(document.getElementById('input-jugador-dorsal').value),
-                estado: document.getElementById('input-jugador-estado').value
-            };
-            if (!data.nombre) return alert("Rellena el nombre");
-            try { await addDoc(collection(db, 'jugadores'), data); mostrarNotificacion("Guardado"); document.getElementById('form-jugador').reset(); closeModJug(); } catch(e){ mostrarNotificacion("Error", true); }
-        });
-
-        // --- Sesion Modal ---
-        const prepSesion = () => {
-            const listEj = document.getElementById('sesion-ejercicios-list');
-            listEj.innerHTML = todosLosEjercicios.map(ej => `<label class="flex items-center space-x-2 text-sm text-slate-700 p-1"><input type="checkbox" value="${ej.id}" class="chk-ejercicio w-4 h-4 rounded text-purple-600"><span class="truncate">${ej.nombre}</span></label>`).join('');
-            const listJug = document.getElementById('sesion-jugadores-list');
-            listJug.innerHTML = todosLosJugadores.map(jug => `<label class="flex items-center space-x-2 text-sm text-slate-700 p-1"><input type="checkbox" value="${jug.id}" checked class="chk-jugador w-4 h-4 rounded text-purple-600"><span class="truncate">#${jug.dorsal} ${jug.nombre}</span></label>`).join('');
-            document.getElementById('input-sesion-fecha').value = new Date().toISOString().split('T')[0];
-        };
-        const closeModSes = bindModal('modal-sesion', 'btn-open-modal-sesion', 'btn-close-modal-sesion', 'btn-cancel-modal-sesion', prepSesion);
-        
-        document.getElementById('btn-save-modal-sesion').addEventListener('click', async () => {
-            const data = {
-                fecha: document.getElementById('input-sesion-fecha').value,
-                objetivo: document.getElementById('input-sesion-objetivo').value,
-                ejercicios: Array.from(document.querySelectorAll('.chk-ejercicio:checked')).map(cb => cb.value),
-                asistencia: Array.from(document.querySelectorAll('.chk-jugador:checked')).map(cb => cb.value)
-            };
-            if (!data.fecha) return alert("Rellena la fecha");
-            try { await addDoc(collection(db, 'sesiones'), data); mostrarNotificacion("Sesión Guardada"); document.getElementById('form-sesion').reset(); closeModSes(); } catch(e){ mostrarNotificacion("Error", true); }
-        });
-
-        // ==========================================
-        // CHART.JS
-        // ==========================================
-        const ctx = document.getElementById('rendimientoChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
-                datasets: [
-                    { label: 'Distancia (Km)', data: [4.2, 7.8, 8.5, 5.1, 3.2], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderRadius: 4 },
-                    { type: 'line', label: 'Carga (RPE)', data: [3, 8, 7, 5, 2], borderColor: 'rgba(59, 130, 246, 1)', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.3, fill: true }
-                ]
-            },
-            options: { maintainAspectRatio: false, responsive: true, scales: { y: { beginAtZero: true } } }
-        });
-    </script>
+    <!-- EL NUEVO MOTOR DE TU APP -->
+    <script type="module" src="./js/main.js"></script>
 </body>
 </html>

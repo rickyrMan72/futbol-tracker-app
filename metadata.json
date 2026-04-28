@@ -1,0 +1,6 @@
+{
+  "name": "futbol-tracker-app",
+  "description": "Una Single Page Application (SPA) para entrenadores de fútbol, que permite gestionar la plantilla, crear ejercicios y planificar sesiones de entrenamiento.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
