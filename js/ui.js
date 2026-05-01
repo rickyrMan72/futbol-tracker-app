@@ -55,21 +55,29 @@ export function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
     const views = document.querySelectorAll('.app-view');
     const headerTitle = document.getElementById('header-title');
-    const titulos = { 'view-dashboard': 'Panel de Control', 'view-plantilla': 'Plantilla', 'view-ejercicios': 'Ejercicios', 'view-sesiones': 'Sesiones' };
+    const titulos = { 'view-dashboard': 'Panel de Control', 'view-plantilla': 'Plantilla', 'view-ejercicios': 'Ejercicios', 'view-sesiones': 'Sesiones', 'view-partidos': 'Partidos', 'view-pizarra': 'Pizarra' };
 
     const btnMobileMenu = document.getElementById('btn-mobile-menu');
     const sidebar = document.getElementById('sidebar');
 
     if (btnMobileMenu && sidebar) {
+        // Asegurar clases base para control manual
+        sidebar.classList.add('absolute', 'md:relative', 'inset-y-0', 'left-0', 'h-full', 'z-50');
+        
         btnMobileMenu.addEventListener('click', () => {
-            if (sidebar.classList.contains('hidden')) {
-                // Show sidebar
-                sidebar.classList.remove('hidden');
-                sidebar.classList.add('flex', 'absolute', 'inset-y-0', 'left-0', 'h-full', 'w-64');
+            if (window.innerWidth >= 768) {
+                // Modo Desktop
+                if (sidebar.classList.contains('md:flex')) {
+                    sidebar.classList.remove('md:flex');
+                    sidebar.classList.add('hidden'); // Ocultar
+                } else {
+                    sidebar.classList.add('md:flex');
+                    sidebar.classList.remove('hidden'); // Mostrar
+                }
             } else {
-                // Hide sidebar
-                sidebar.classList.add('hidden');
-                sidebar.classList.remove('flex', 'absolute', 'inset-y-0', 'left-0', 'h-full');
+                // Modo Mobile
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('flex');
             }
         });
     }
@@ -84,10 +92,20 @@ export function initNavigation() {
             document.getElementById(targetId).classList.remove('hidden');
             headerTitle.textContent = titulos[targetId];
 
-            if (sidebar && window.innerWidth < 768) {
-                // Hide sidebar after click on mobile
-                sidebar.classList.add('hidden');
-                sidebar.classList.remove('flex', 'absolute', 'inset-y-0', 'left-0', 'h-full');
+            if (sidebar) {
+                if (window.innerWidth < 768) {
+                    // Hide sidebar after click on mobile
+                    sidebar.classList.add('hidden');
+                    sidebar.classList.remove('flex');
+                } else if (targetId === 'view-directo' || targetId === 'view-pizarra') {
+                    // Auto-hide on desktop for fullscreen views
+                    sidebar.classList.remove('md:flex');
+                    sidebar.classList.add('hidden');
+                } else {
+                    // Make sure it is visible for standard views
+                    sidebar.classList.add('md:flex');
+                    sidebar.classList.remove('hidden');
+                }
             }
         });
     });

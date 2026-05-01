@@ -1,8 +1,12 @@
 import { auth, signInAnonymously } from './firebase-config.js';
 import { initNavigation, initChart } from './ui.js';
 import { initEjercicios } from './mod-ejercicios.js';
+import { initEquipos } from './mod-equipos.js';
 import { initJugadores } from './mod-jugadores.js';
 import { initSesiones } from './mod-sesiones.js';
+import { initPartidos } from './mod-partidos.js';
+import { initDirecto } from './mod-directo.js';
+import { initPizarra } from './mod-pizarra.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Iniciar elementos visuales
@@ -18,8 +22,12 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBadge.classList.replace('bg-slate-100', 'bg-emerald-100');
         
         initEjercicios();
+        initEquipos();
         initJugadores();
         initSesiones();
+        initPartidos();
+        initDirecto();
+        initPizarra();
         
     }).catch((error) => {
         console.error("Error Firebase:", error);
