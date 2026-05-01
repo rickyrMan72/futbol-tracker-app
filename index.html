@@ -28,16 +28,37 @@
                 <li><a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-users w-6 text-center mr-2"></i><span class="font-medium">Plantilla</span></a></li>
                 <li><a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i><span class="font-medium">Ejercicios</span></a></li>
                 <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium">Sesiones</span></a></li>
+                <li><a href="#" data-target="view-partidos" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-trophy w-6 text-center mr-2"></i><span class="font-medium">Partidos</span></a></li>
+                <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium">Pizarra</span></a></li>
             </ul>
         </nav>
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
     <div class="flex-1 flex flex-col overflow-hidden relative">
-        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10 flex-shrink-0">
-            <button id="btn-mobile-menu" class="md:hidden text-slate-500 hover:text-slate-800"><i class="fa-solid fa-bars text-xl"></i></button>
-            <h2 id="header-title" class="text-xl font-semibold text-slate-800 hidden md:block">Panel de Control</h2>
-            <div class="flex items-center space-x-4">
+        <header class="h-16 bg-emerald-700 sm:bg-white shadow-sm flex items-center justify-between px-4 sm:px-6 z-10 flex-shrink-0">
+            <div class="flex items-center gap-3 sm:gap-4 w-full">
+                <button id="btn-mobile-menu" class="text-white sm:text-slate-500 hover:text-slate-200 sm:hover:text-slate-800"><i class="fa-solid fa-bars text-xl"></i></button>
+                <h2 id="header-title" class="text-lg sm:text-xl font-semibold text-white sm:text-slate-800 hidden xl:block min-w-max mr-2">Panel de Control</h2>
+                
+                <!-- SELECTOR DE EQUIPO GLOBAL -->
+                <div class="flex items-center gap-1 sm:gap-2 flex-1 sm:flex-none">
+                    <div id="equipo-escudo-container" class="w-8 h-8 rounded-full border border-slate-200 bg-white sm:bg-slate-50 flex items-center justify-center overflow-hidden hidden shrink-0 shadow-sm">
+                        <img id="equipo-escudo-img" src="" class="w-full h-full object-contain" alt="Escudo">
+                    </div>
+                    <select id="select-equipo" class="w-full sm:w-auto px-2 py-1.5 border rounded-lg focus:ring-blue-500 text-sm font-medium text-slate-800 truncate">
+                        <option value="">Selecciona un equipo...</option>
+                    </select>
+                    <div class="hidden sm:flex gap-1 shrink-0">
+                        <button id="btn-edit-equipo" class="w-8 h-8 border border-white/20 sm:border-slate-300 sm:hover:bg-slate-100 text-white sm:text-slate-700 rounded-lg flex items-center justify-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed bg-white/10 sm:bg-transparent" title="Editar Equipo"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button id="btn-del-equipo" class="w-8 h-8 border border-red-300 sm:border-red-200 bg-red-500 sm:bg-transparent sm:hover:bg-red-50 text-white sm:text-red-500 rounded-lg flex items-center justify-center transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" title="Eliminar Equipo"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
+                    <button id="btn-open-modal-equipo" class="shrink-0 border border-white/20 sm:border-slate-300 sm:hover:bg-slate-100 text-white sm:text-slate-700 px-2 py-1.5 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm text-sm bg-white/10 sm:bg-transparent" title="Nuevo Equipo">
+                        <i class="fa-solid fa-plus"></i> <span class="hidden sm:inline ml-1 text-xs">Equipo</span>
+                    </button>
+                </div>
+            </div>
+            <div class="hidden sm:flex items-center space-x-4 pl-4 min-w-max">
                 <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando BD...</span>
             </div>
         </header>
@@ -69,10 +90,17 @@
             <!-- VISTA 2: PLANTILLA -->
             <div id="view-plantilla" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Gestiona los jugadores de tu equipo.</p>
-                    <button id="btn-open-modal-jugador" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-user-plus mr-2"></i> Añadir Jugador</button>
+                    <p class="text-slate-500 text-sm">Gestiona los jugadores de tu equipo activo.</p>
+                    <button id="btn-open-modal-jugador" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-user-plus mr-2"></i> Añadir Jugador
+                    </button>
                 </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6" id="lista-jugadores-container"></div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-plantilla" class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para ver la plantilla.</p>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 hidden" id="lista-jugadores-container"></div>
             </div>
 
             <!-- VISTA 3: EJERCICIOS -->
@@ -87,12 +115,175 @@
             <!-- VISTA 4: SESIONES -->
             <div id="view-sesiones" class="app-view hidden fade-in">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <p class="text-slate-500 text-sm">Planifica entrenamientos.</p>
-                    <button id="btn-open-modal-sesion" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-calendar-plus mr-2"></i> Nueva Sesión</button>
+                    <p class="text-slate-500 text-sm">Planifica entrenamientos para tu equipo activo.</p>
+                    <button id="btn-open-modal-sesion" class="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-calendar-plus mr-2"></i> Nueva Sesión</button>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-sesiones-container"></div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-sesion" class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para planificar sesiones.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden" id="lista-sesiones-container"></div>
             </div>
+            <div id="view-partidos" class="app-view hidden fade-in flex-1 flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
+                    <p class="text-slate-500 text-sm">Gestiona los partidos de tu equipo activo.</p>
+                    <button id="btn-open-modal-partido" class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-plus mr-2"></i> Nuevo Partido</button>
+                </div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-partido" class="flex flex-col items-center justify-center py-16 text-slate-400 shrink-0">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para gestionar partidos.</p>
+                </div>
+                <div class="space-y-4 hidden flex-1 overflow-y-auto pb-6" id="lista-partidos-container"></div>
+            </div>
+            
+            <!-- VISTA 6: DIRECTO (EFEMÉRIDES) -->
+            <div id="view-directo" class="app-view hidden fade-in absolute inset-0 p-4 lg:p-8 flex flex-col bg-slate-50 z-10">
+                <div class="flex justify-between items-center mb-2 shrink-0">
+                    <button id="btn-back-partidos" class="text-slate-500 hover:text-slate-800 transition-colors"><i class="fa-solid fa-arrow-left mr-2"></i> Volver</button>
+                    <h3 id="directo-titulo-partido" class="font-bold text-base sm:text-lg text-slate-800 truncate px-2">Cargando...</h3>
+                    <button id="btn-config-acciones" class="text-slate-500 hover:text-slate-800 transition-colors" title="Configurar Acciones"><i class="fa-solid fa-gear"></i></button>
+                </div>
+
+                <!-- TOP: Crono -->
+                <div class="bg-slate-800 text-white rounded-xl shadow-lg p-3 mb-2 flex flex-row items-center justify-between shrink-0">
+                    <div class="flex flex-col items-start gap-0.5">
+                        <div class="text-3xl sm:text-4xl font-mono font-bold tracking-wider leading-none" id="directo-cronometro">00:00</div>
+                        <div class="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest font-semibold leading-none" id="directo-periodo">1ª Parte</div>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <button id="btn-crono-start" class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 hover:bg-emerald-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg" title="Iniciar/Reanudar"><i class="fa-solid fa-play ml-1"></i></button>
+                        <button id="btn-crono-pause" class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 hover:bg-amber-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg hidden" title="Pausar"><i class="fa-solid fa-pause"></i></button>
+                        <button id="btn-crono-next" class="px-3 sm:px-4 h-10 sm:h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-colors shadow-lg ml-1 sm:ml-2" title="Fin del periodo / Siguiente"><span class="hidden sm:inline">2ª Parte</span> <i class="fa-solid fa-forward-step sm:ml-2"></i></button>
+                    </div>
+                </div>
+
+                <!-- MIDDLE: Jugadores y Acciones -->
+                <div class="flex flex-row gap-2 flex-1 min-h-0 mb-2">
+                    <!-- IZQUIERDA: Jugadores en el campo -->
+                    <div class="w-1/2 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden min-h-[200px]">
+                        <div class="bg-emerald-50 border-b border-emerald-100 px-2 sm:px-4 py-2 font-bold text-emerald-800 flex justify-between items-center shrink-0 text-sm">
+                            <span class="truncate"><i class="fa-solid fa-users mr-1"></i> <span class="hidden sm:inline">En el Campo</span></span>
+                            <span id="directo-count-campo" class="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs shrink-0">0</span>
+                        </div>
+                        <div id="directo-jugadores-list" class="flex-1 overflow-y-auto p-1.5 sm:p-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 content-start">
+                            <!-- Los jugadores que están en el campo aparecen aquí -->
+                        </div>
+                    </div>
+
+                    <!-- DERECHA: Acciones disponibles -->
+                    <div class="w-1/2 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden min-h-[200px]">
+                        <div class="bg-slate-50 border-b border-slate-200 px-2 sm:px-4 py-2 font-bold text-slate-700 shrink-0 flex justify-between items-center text-sm">
+                            <span class="truncate"><i class="fa-solid fa-bolt mr-1"></i> <span class="hidden sm:inline">Acción para</span> <span id="directo-jugador-sel-name" class="text-blue-600 font-bold truncate inline-block align-bottom max-w-[80px] sm:max-w-[150px]">Nadie</span></span>
+                            <button id="btn-unselect-jugador" class="text-xs text-slate-400 hover:text-slate-600 hidden"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="directo-acciones-list" class="flex-1 overflow-y-auto p-1.5 sm:p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 content-start opacity-50 pointer-events-none transition-opacity">
+                            <!-- Botones de acciones -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM: Línea de tiempo / Efemérides -->
+                <div class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-28 sm:h-36 relative z-10 transition-all hover:h-48 sm:hover:h-64 group">
+                    <div class="bg-slate-50 border-b border-slate-200 px-4 py-1.5 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
+                        <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
+                        <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
+                    </div>
+                    <div id="directo-timeline" class="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1 sm:space-y-2">
+                        <!-- Lista de eventos (Goles, tarjetas, cambios...) -->
+                    </div>
+                </div>
+            </div>
+            <!-- VISTA 7: PIZARRA -->
+            <div id="view-pizarra" class="app-view hidden fade-in h-full flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 shrink-0">
+                    <div>
+                        <h3 class="font-bold text-xl text-slate-800">Pizarra Táctica (Fútbol 7)</h3>
+                        <p class="text-slate-500 text-sm">Cambia la formación y arrastra a los jugadores.</p>
+                    </div>
+                    <div class="mt-2 sm:mt-0 flex gap-2">
+                        <select id="pizarra-formacion" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500">
+                            <option value="1-2-1-2-1">1-2-1-2-1</option>
+                            <option value="1-3-2-1">1-3-2-1</option>
+                            <option value="1-2-3-1">1-2-3-1</option>
+                            <option value="1-3-1-2">1-3-1-2</option>
+                            <option value="1-2-2-2">1-2-2-2</option>
+                        </select>
+                        <button id="btn-pizarra-reset" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors" title="Reiniciar posiciones"><i class="fa-solid fa-rotate-left"></i></button>
+                    </div>
+                </div>
+
+                <div class="flex-1 min-h-[400px] border-2 border-emerald-500 rounded-xl relative overflow-hidden bg-emerald-600 drop-zone shadow-inner" id="pizarra-campo">
+                    <!-- Líneas del campo completo -->
+                    <div class="absolute inset-0 border-[3px] border-white opacity-40 m-4 rounded pointer-events-none"></div>
+                    <div class="absolute top-1/2 left-4 right-4 h-0 border-t-[3px] border-white opacity-40 pointer-events-none"></div>
+                    <div class="absolute top-1/2 left-1/2 w-16 h-16 sm:w-24 sm:h-24 -ml-8 -mt-8 sm:-ml-12 sm:-mt-12 border-[3px] border-white opacity-40 rounded-full pointer-events-none"></div>
+                    <div class="absolute top-4 left-1/2 w-24 sm:w-48 h-12 sm:h-24 -ml-12 sm:-ml-24 border-[3px] border-white border-t-0 opacity-40 pointer-events-none"></div>
+                    <div class="absolute bottom-4 left-1/2 w-24 sm:w-48 h-12 sm:h-24 -ml-12 sm:-ml-24 border-[3px] border-white border-b-0 opacity-40 pointer-events-none"></div>
+                    <!-- Área de portero top -->
+                    <div class="absolute top-4 left-1/2 w-12 sm:w-24 h-4 sm:h-8 -ml-6 sm:-ml-12 border-[3px] border-white border-t-0 opacity-40 pointer-events-none"></div>
+                    <!-- Área de portero bottom -->
+                    <div class="absolute bottom-4 left-1/2 w-12 sm:w-24 h-4 sm:h-8 -ml-6 sm:-ml-12 border-[3px] border-white border-b-0 opacity-40 pointer-events-none"></div>
+                    
+                    <!-- Fichas (generadas dinámicamente) -->
+                </div>
+            </div>
+
         </main>
+    </div>
+
+    <!-- MODALES -->
+    <div id="modal-partido" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Nuevo Partido</h3><button id="btn-close-modal-partido" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-partido" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Rival</label>
+                                <input type="text" id="input-partido-rival" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="Nombre del Rival">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Escudo del Rival (opcional)</label>
+                                <input type="url" id="input-partido-escudo-rival" class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="URL del Escudo del Rival">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold mb-1">Fecha</label>
+                                    <input type="date" id="input-partido-fecha" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold mb-1">Hora</label>
+                                    <input type="time" id="input-partido-hora" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Lugar</label>
+                                <input type="text" id="input-partido-lugar" class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="Ej. Campo Municipal">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Comentarios</label>
+                                <textarea id="input-partido-comentarios" class="w-full px-3 py-2 border rounded-lg resize-none focus:ring-amber-500" rows="2" placeholder="Competición, incidencias..."></textarea>
+                            </div>
+                        </div>
+                        <div class="space-y-2 flex flex-col max-h-[500px]">
+                            <label class="block text-sm font-bold mb-1">Convocatoria y Titulares</label>
+                            <div class="text-xs text-slate-500 mb-2 flex justify-between px-2 pr-4 font-bold border-b pb-1">
+                                <span>Jugador</span>
+                                <div class="flex gap-4 min-w-max">
+                                    <span class="w-8 text-center" title="Convocado">Conv</span>
+                                    <span class="w-8 text-center" title="Titular">Tit</span>
+                                </div>
+                            </div>
+                            <div id="partido-jugadores-list" class="space-y-1 overflow-y-auto pr-2 flex-1"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-partido" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button><button id="btn-save-modal-partido" class="px-4 py-2 bg-amber-600 text-white rounded-lg">Guardar Partido</button></div>
+        </div>
     </div>
 
     <!-- MODALES -->
@@ -104,17 +295,75 @@
                     <div class="flex flex-col md:flex-row gap-6">
                         <!-- Campos del formulario -->
                         <div class="w-full md:w-1/3 space-y-4">
-                            <input type="text" id="input-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
-                            <div class="flex gap-2">
-                                <select id="input-categoria" class="w-1/2 px-3 py-2 border rounded-lg"><option>Táctico</option><option>Físico</option><option>Técnico</option></select>
-                                <input type="number" id="input-duracion" required class="w-1/2 px-3 py-2 border rounded-lg" placeholder="Minutos (ej. 15)">
+                            <!-- Línea 1: Título -->
+                            <input type="text" id="input-nombre" required class="w-full px-3 py-2 border rounded-lg focus:ring-emerald-500" placeholder="Nombre (ej. Rondo 4v2)">
+                            
+                            <!-- Línea 2: Tipo, Modalidad y Campo -->
+                            <div class="grid grid-cols-3 gap-2">
+                                <select id="input-categoria" class="w-full px-1 py-2 border rounded-lg focus:ring-emerald-500 text-sm text-left">
+                                    <option value="Táctico">Táctico</option>
+                                    <option value="Físico">Físico</option>
+                                    <option value="Técnico">Técnico</option>
+                                    <option value="Estrategia">Estrategia</option>
+                                    <option value="Calentamiento">Calent</option>
+                                    <option value="Global">Global</option>
+                                </select>
+                                <select id="input-modalidad" class="w-full px-1 py-2 border rounded-lg focus:ring-emerald-500 text-sm text-left">
+                                    <option value="Ambos">F11 / F7</option>
+                                    <option value="Fútbol 11">Fútbol 11</option>
+                                    <option value="Fútbol 7">Fútbol 7</option>
+                                </select>
+                                <select id="pizarra-fondo" class="w-full px-1 py-2 border rounded-lg text-slate-700 bg-white focus:ring-emerald-500 text-sm text-left">
+                                    <option value="completo">Completo</option>
+                                    <option value="medio">Medio</option>
+                                    <option value="area">Área</option>
+                                    <option value="cuadrado">Cuadrado</option>
+                                    <option value="cuadricula2">Cuadrícula 2x2</option>
+                                    <option value="cuadricula3">Cuadrícula 3x3</option>
+                                </select>
                             </div>
-                            <select id="pizarra-fondo" class="w-full px-3 py-2 border rounded-lg text-slate-700 bg-white">
-                                <option value="completo">Pizarra: Campo Completo</option>
-                                <option value="medio">Pizarra: Medio Campo</option>
-                                <option value="area">Pizarra: Área</option>
-                            </select>
-                            <textarea id="input-descripcion" rows="5" required class="w-full px-3 py-2 border rounded-lg" placeholder="Descripción"></textarea>
+
+                            <!-- Línea 3: Tiempos y Reps -->
+                            <div class="grid grid-cols-4 gap-x-2 gap-y-3">
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">T./Rep (m)</label>
+                                    <input type="number" id="input-tiempo-rep" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 5" min="0">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Reps</label>
+                                    <input type="number" id="input-reps" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 3" min="1" value="1">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Desc. (m)</label>
+                                    <input type="number" id="input-descanso" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 1" min="0" value="0">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Total (m)</label>
+                                    <input type="number" id="input-duracion" required readonly class="w-full px-2 py-2 border border-emerald-100 bg-emerald-50 rounded-lg font-bold text-emerald-700 text-sm focus:outline-none" placeholder="0">
+                                </div>
+                            </div>
+                            
+                            <!-- Línea 4: Intensidad y Jugadores -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <select id="input-intensidad" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500">
+                                        <option value="" disabled selected hidden>Intensidad...</option>
+                                        <option value="Baja">Baja</option>
+                                        <option value="Media">Media</option>
+                                        <option value="Alta">Alta</option>
+                                        <option value="Máxima">Máxima</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="text" id="input-jugadores" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Nº Jug: ej. 10 o 4v4+2">
+                                </div>
+                            </div>
+
+                            <!-- Línea 5: Material -->
+                            <input type="text" id="input-material" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Material: Conos, petos, balones...">
+
+                            <!-- Línea 6: Descripción -->
+                            <textarea id="input-descripcion" rows="4" required class="w-full px-3 py-2 border rounded-lg focus:ring-emerald-500 text-sm" placeholder="Descripción de la tarea, reglas, puntuación..."></textarea>
                         </div>
                         
                             <!-- Pizarra Táctica -->
@@ -122,20 +371,28 @@
                             
                             <!-- Barra de Herramientas -->
                             <div class="flex flex-wrap items-center justify-between gap-2 mb-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
-                                <div class="flex items-center gap-1 md:gap-2">
-                                    <button type="button" id="tool-player-blue" class="p-1.5 md:p-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Azul"><i class="fa-solid fa-user"></i></button>
-                                    <button type="button" id="tool-player-red" class="p-1.5 md:p-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Rojo"><i class="fa-solid fa-user"></i></button>
-                                    <button type="button" id="tool-player-yellow" class="p-1.5 md:p-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Amarillo"><i class="fa-solid fa-user"></i></button>
-                                    <button type="button" id="tool-player-black" class="p-1.5 md:p-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md flex items-center justify-center transition-colors" title="Añadir Jugador Negro"><i class="fa-solid fa-user"></i></button>
+                                <div class="flex flex-wrap items-center gap-1 md:gap-2">
+                                    <select id="tool-color" class="p-1 md:p-1.5 text-xs md:text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 max-w-[80px] md:max-w-none">
+                                        <option value="#dc2626">Rojo</option>
+                                        <option value="#2563eb">Azul</option>
+                                        <option value="#eab308">Amarillo</option>
+                                        <option value="#1e293b">Negro</option>
+                                        <option value="#16a34a">Verde</option>
+                                        <option value="#9333ea">Morado</option>
+                                    </select>
+                                    <button type="button" id="tool-player" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md flex items-center justify-center border transition-colors" title="Añadir Jugador"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-portero" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md flex items-center justify-center border transition-colors" title="Añadir Portero"><i class="fa-solid fa-user-shield"></i></button>
+                                    
                                     <button type="button" id="tool-balon" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-800 rounded-md flex items-center justify-center border transition-colors" title="Añadir Balón">⚽</button>
                                     <button type="button" id="tool-cono" class="p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-md flex items-center justify-center transition-colors" title="Añadir Cono"><i class="fa-solid fa-triangle-exclamation"></i></button>
                                     
                                     <div class="w-px h-6 bg-slate-300 mx-0.5"></div>
 
-                                    <div class="flex items-center gap-1 bg-white border rounded p-1 mx-0.5" title="Paso de animación">
-                                        <button type="button" id="step-prev" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-minus text-[10px]"></i></button>
-                                        <span id="step-display" class="w-4 md:w-6 text-center font-bold text-slate-800 text-xs md:text-sm">1</span>
-                                        <button type="button" id="step-next" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                    <div class="flex items-center gap-1 bg-white border rounded p-1 mx-0.5" title="Controles de animación">
+                                        <button type="button" id="step-prev" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+                                        <span id="step-display" class="w-8 text-center font-bold text-slate-800 text-xs md:text-sm" title="Paso actual / Total pasos">1/1</span>
+                                        <button type="button" id="step-next" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors" title="Siguiente paso"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                        <button type="button" id="step-delete" class="w-5 h-5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded flex items-center justify-center transition-colors hidden" title="Eliminar este paso"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
                                     </div>
                                     
                                     <div class="w-px h-6 bg-slate-300 mx-0.5 hidden md:block"></div>
@@ -147,7 +404,7 @@
 
                                 <div class="flex gap-2">
                                     <button type="button" id="tool-play" class="px-3 py-1.5 md:py-2 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm transition-colors font-bold text-sm flex items-center" title="Reproducir Animación">
-                                        <i class="fa-solid fa-play mr-1"></i> <span class="hidden sm:inline">Animación</span>
+                                        <i class="fa-solid fa-play"></i>
                                     </button>
                                 </div>
                             </div>
@@ -159,7 +416,7 @@
                                 </div>
                                 <div class="absolute bottom-2 right-2 flex gap-2 z-10">
                                     <button type="button" id="tool-play-fullscreen" class="hidden px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors font-bold text-sm items-center" title="Reproducir Animación">
-                                        <i class="fa-solid fa-play mr-1"></i> <span class="hidden sm:inline">Animación</span>
+                                        <i class="fa-solid fa-play"></i>
                                     </button>
                                     <button type="button" id="tool-fullscreen" class="p-2 aspect-square bg-slate-800/80 hover:bg-slate-900 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors flex items-center justify-center" title="Pantalla Completa">
                                         <i class="fa-solid fa-expand"></i>
@@ -177,13 +434,40 @@
         </div>
     </div>
 
+    <div id="modal-equipo" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Añadir Equipo</h3>
+                <button id="btn-close-modal-equipo" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-equipo" class="space-y-4">
+                    <input type="text" id="input-equipo-nombre" required class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="Nombre del Equipo (ej. Alevín A)">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <select id="input-equipo-modalidad" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500">
+                            <option value="Fútbol 11">Fútbol 11</option>
+                            <option value="Fútbol 7">Fútbol 7</option>
+                        </select>
+                        <input type="text" id="input-equipo-temporada" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="Temporada (ej. 24/25)">
+                    </div>
+                    <input type="url" id="input-equipo-escudo" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="URL del Escudo (opcional)">
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal-equipo" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button id="btn-save-modal-equipo" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-jugador" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Añadir Jugador</h3><button id="btn-close-modal-jugador" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="form-jugador" class="space-y-4">
                     <input type="text" id="input-jugador-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
-                    <select id="input-jugador-posicion" class="w-full px-3 py-2 border rounded-lg"><option>Portero</option><option>Defensa</option><option>Centrocampista</option><option>Delantero</option></select>
+                    <select id="input-jugador-posicion" class="w-full px-3 py-2 border rounded-lg"><option value="Portero">Portero</option><option value="Central">Central</option><option value="Lateral">Lateral</option><option value="Mediocentro">Mediocentro</option><option value="Volante">Volante</option><option value="Delantero">Delantero</option></select>
                     <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border rounded-lg" placeholder="Dorsal">
                     <select id="input-jugador-estado" class="w-full px-3 py-2 border rounded-lg"><option value="Disponible">Disponible</option><option value="Tocado">Tocado</option><option value="Lesionado">Lesionado</option></select>
                 </form>
@@ -204,6 +488,29 @@
                 </form>
             </div>
             <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-sesion" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-sesion" class="px-4 py-2 bg-purple-600 text-white rounded-lg">Guardar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-sustitucion" class="fixed inset-0 bg-slate-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
+                <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-arrows-rotate mr-2"></i> Sustitución</h3>
+                <button id="btn-close-modal-sustitucion" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <span class="text-sm font-bold text-slate-500 block mb-1">Sale del campo:</span>
+                <div class="font-bold text-lg text-slate-800" id="sustitucion-jugador-sale">Nadie</div>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <label class="block text-sm font-bold mb-3 text-slate-700">Selecciona quién entra (Banquillo):</label>
+                <div id="sustitucion-banquillo-list" class="space-y-2">
+                    <!-- Jugadores en banquillo -->
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal-sustitucion" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button id="btn-save-modal-sustitucion" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Hacer Cambio</button>
+            </div>
         </div>
     </div>
 
