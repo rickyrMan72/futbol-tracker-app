@@ -128,7 +128,10 @@
             <div id="view-partidos" class="app-view hidden fade-in flex-1 flex flex-col">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
                     <p class="text-slate-500 text-sm">Gestiona los partidos de tu equipo activo.</p>
-                    <button id="btn-open-modal-partido" class="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-plus mr-2"></i> Nuevo Partido</button>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button id="btn-toggle-historicos" class="flex-1 sm:flex-none justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Ver Históricos</button>
+                        <button id="btn-open-modal-partido" class="flex-1 sm:flex-none justify-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-plus mr-2"></i> Nuevo Partido</button>
+                    </div>
                 </div>
                 <!-- Mensaje cuando no hay equipo seleccionado -->
                 <div id="msg-no-equipo-partido" class="flex flex-col items-center justify-center py-16 text-slate-400 shrink-0">
@@ -185,10 +188,13 @@
                 </div>
 
                 <!-- BOTTOM: Línea de tiempo / Efemérides -->
-                <div class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-28 sm:h-36 relative z-10 transition-all hover:h-48 sm:hover:h-64 group">
+                <div id="directo-timeline-container" class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-28 sm:h-36 relative z-10 transition-all group hover:h-48 sm:hover:h-64">
                     <div class="bg-slate-50 border-b border-slate-200 px-4 py-1.5 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
                         <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
-                        <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
+                            <button id="btn-timeline-expand" class="text-slate-400 hover:text-slate-600 transition-colors text-sm" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
+                        </div>
                     </div>
                     <div id="directo-timeline" class="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1 sm:space-y-2">
                         <!-- Lista de eventos (Goles, tarjetas, cambios...) -->
@@ -211,26 +217,121 @@
                             <option value="1-2-2-2">1-2-2-2</option>
                         </select>
                         <button id="btn-pizarra-reset" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors" title="Reiniciar posiciones"><i class="fa-solid fa-rotate-left"></i></button>
+                        <button id="btn-pizarra-fullscreen" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
                     </div>
                 </div>
 
                 <div class="flex-1 min-h-[400px] border-2 border-emerald-500 rounded-xl relative overflow-hidden bg-emerald-600 drop-zone shadow-inner" id="pizarra-campo">
-                    <!-- Líneas del campo completo -->
-                    <div class="absolute inset-0 border-[3px] border-white opacity-40 m-4 rounded pointer-events-none"></div>
-                    <div class="absolute top-1/2 left-4 right-4 h-0 border-t-[3px] border-white opacity-40 pointer-events-none"></div>
-                    <div class="absolute top-1/2 left-1/2 w-16 h-16 sm:w-24 sm:h-24 -ml-8 -mt-8 sm:-ml-12 sm:-mt-12 border-[3px] border-white opacity-40 rounded-full pointer-events-none"></div>
-                    <div class="absolute top-4 left-1/2 w-24 sm:w-48 h-12 sm:h-24 -ml-12 sm:-ml-24 border-[3px] border-white border-t-0 opacity-40 pointer-events-none"></div>
-                    <div class="absolute bottom-4 left-1/2 w-24 sm:w-48 h-12 sm:h-24 -ml-12 sm:-ml-24 border-[3px] border-white border-b-0 opacity-40 pointer-events-none"></div>
-                    <!-- Área de portero top -->
-                    <div class="absolute top-4 left-1/2 w-12 sm:w-24 h-4 sm:h-8 -ml-6 sm:-ml-12 border-[3px] border-white border-t-0 opacity-40 pointer-events-none"></div>
-                    <!-- Área de portero bottom -->
-                    <div class="absolute bottom-4 left-1/2 w-12 sm:w-24 h-4 sm:h-8 -ml-6 sm:-ml-12 border-[3px] border-white border-b-0 opacity-40 pointer-events-none"></div>
+                    <!-- SVG Campo -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-40" viewBox="0 0 60 90" preserveAspectRatio="none">
+                        <!-- Borde exterior -->
+                        <rect x="2" y="2" width="56" height="86" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Línea central -->
+                        <line x1="2" y1="45" x2="58" y2="45" stroke="white" stroke-width="0.4"></line>
+                        <!-- Círculo central -->
+                        <circle cx="30" cy="45" r="7" fill="none" stroke="white" stroke-width="0.4"></circle>
+                        <!-- Punto central -->
+                        <circle cx="30" cy="45" r="0.5" fill="white"></circle>
+                        
+                        <!-- Portería superior -->
+                        <rect x="26" y="0" width="8" height="2" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Área chica superior -->
+                        <rect x="21" y="2" width="18" height="4.5" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Área grande superior -->
+                        <rect x="14" y="2" width="32" height="12" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Punto de penalti superior (aprox 9m) -->
+                        <circle cx="30" cy="11" r="0.5" fill="white"></circle>
+                        <!-- Semicírculo superior (intersección en y=14) -->
+                        <!-- Radio 7. Centro en (30, 11). (x-30)^2 + (14-11)^2 = 49 -> (x-30)^2 + 9 = 49 -> x = 30 +/- 6.32 -> x = 23.68, 36.32 -->
+                        <path d="M 23.68 14 A 7 7 0 0 0 36.32 14" fill="none" stroke="white" stroke-width="0.4"></path>
+
+                        <!-- Portería inferior -->
+                        <rect x="26" y="88" width="8" height="2" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Área chica inferior -->
+                        <rect x="21" y="83.5" width="18" height="4.5" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Área grande inferior -->
+                        <rect x="14" y="76" width="32" height="12" fill="none" stroke="white" stroke-width="0.4"></rect>
+                        <!-- Punto de penalti inferior -->
+                        <circle cx="30" cy="79" r="0.5" fill="white"></circle>
+                        <!-- Semicírculo inferior -->
+                        <path d="M 36.32 76 A 7 7 0 0 0 23.68 76" fill="none" stroke="white" stroke-width="0.4"></path>
+                    </svg>
                     
                     <!-- Fichas (generadas dinámicamente) -->
                 </div>
             </div>
 
         </main>
+    </div>
+
+    <!-- MODALES -->
+    <div id="modal-config-acciones" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in z-[60]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Configurar Acciones</h3>
+                <button id="btn-close-modal-acciones" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="text-sm text-slate-500 mb-4">Configura las acciones que estarán disponibles en este partido. Las acciones marcadas con [S] realizan una sustitución de jugador.</div>
+                <div id="list-acciones-config" class="space-y-2 mb-4">
+                   <!-- acciones list renderizadas aqui -->
+                </div>
+                
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-sm mb-3" id="title-form-accion">Nueva Acción</h4>
+                    <input type="hidden" id="input-accion-id" value="">
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <input type="text" id="input-accion-nombre" placeholder="Nombre" class="px-3 py-2 border rounded-lg text-sm w-full">
+                        <select id="input-accion-icon" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="fa-bolt">Rayo (fa-bolt)</option>
+                            <option value="fa-futbol">Balón (fa-futbol)</option>
+                            <option value="fa-crown">Corona (fa-crown)</option>
+                            <option value="fa-handshake">Apretón de manos (fa-handshake)</option>
+                            <option value="fa-bullseye">Diana (fa-bullseye)</option>
+                            <option value="fa-xmark">Cruz (fa-xmark)</option>
+                            <option value="fa-magnet">Imán (fa-magnet)</option>
+                            <option value="fa-arrow-right-from-bracket">Salir (fa-arrow-right-from-bracket)</option>
+                            <option value="fa-hand">Mano (fa-hand)</option>
+                            <option value="fa-ban">Prohibido (fa-ban)</option>
+                            <option value="fa-flag">Bandera (fa-flag)</option>
+                            <option value="fa-triangle-exclamation">Alerta (fa-triangle-exclamation)</option>
+                            <option value="fa-arrows-rotate">Cambio (fa-arrows-rotate)</option>
+                            <option value="fa-truck-medical">Ambulancia (fa-truck-medical)</option>
+                            <option value="fa-check">Check (fa-check)</option>
+                            <option value="fa-star">Estrella (fa-star)</option>
+                            <option value="fa-shield-halved">Escudo (fa-shield-halved)</option>
+                            <option value="fa-stopwatch">Cronómetro (fa-stopwatch)</option>
+                            <option value="fa-shoe-prints">Pisadas (fa-shoe-prints)</option>
+                            <option value="fa-shirt">Camiseta (fa-shirt)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <select id="input-accion-color" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="text-slate-500" class="text-slate-500 font-bold">Gris</option>
+                            <option value="text-blue-500" class="text-blue-500 font-bold">Azul</option>
+                            <option value="text-emerald-500" class="text-emerald-500 font-bold">Verde</option>
+                            <option value="text-red-500" class="text-red-500 font-bold">Rojo</option>
+                            <option value="text-amber-500" class="text-amber-500 font-bold">Naranja</option>
+                            <option value="text-purple-500" class="text-purple-500 font-bold">Morado</option>
+                            <option value="text-pink-500" class="text-pink-500 font-bold">Rosa</option>
+                            <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
+                        </select>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="input-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
+                            <label for="input-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-accion" class="w-1/3 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 hidden">Cancelar</button>
+                        <button id="btn-save-accion" class="flex-1 bg-slate-800 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-700">Añadir Acción</button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end">
+                <button id="btn-done-modal-acciones" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium">Hecho</button>
+            </div>
+        </div>
     </div>
 
     <!-- MODALES -->
@@ -244,6 +345,12 @@
                             <div>
                                 <label class="block text-sm font-bold mb-1">Rival</label>
                                 <input type="text" id="input-partido-rival" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="Nombre del Rival">
+                            </div>
+                            <div class="flex items-center mt-2">
+                                <input type="checkbox" id="input-partido-local" class="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500" checked>
+                                <label for="input-partido-local" class="ml-2 block text-sm font-medium text-slate-700">
+                                    Jugamos de Local
+                                </label>
                             </div>
                             <div>
                                 <label class="block text-sm font-bold mb-1">Escudo del Rival (opcional)</label>

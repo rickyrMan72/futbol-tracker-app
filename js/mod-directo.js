@@ -1,6 +1,7 @@
-import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion } from './firebase-config.js';
-import { mostrarNotificacion } from './ui.js';
+import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc } from './firebase-config.js';
+import { mostrarNotificacion, confirmarAccion } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
+import { todosLosEquipos } from './mod-equipos.js';
 import { todosLosPartidos } from './mod-partidos.js';
 
 let partidoIdActivo = null;
@@ -13,7 +14,7 @@ let cronoInterval = null;
 let jugadorSeleccionadoId = null;
 let accionCambioPendiente = null;
 
-export const ACCIONES = [
+export const DEFAULT_ACCIONES = [
     { id: 'gol-pie', nombre: 'Gol con el pie', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
     { id: 'gol-cabeza', nombre: 'Gol de cabeza', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
     { id: 'gol-falta', nombre: 'Gol de falta', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
@@ -32,6 +33,13 @@ export const ACCIONES = [
     { id: 'sustitucion-lesion', nombre: 'Sustit. por Lesión', icon: 'fa-truck-medical', color: 'text-red-500', isChange: true }
 ];
 
+export function getAccionesPartido() {
+    if (partidoObj && partidoObj.configAcciones) {
+        return partidoObj.configAcciones;
+    }
+    return DEFAULT_ACCIONES;
+}
+
 export function initDirecto() {
     document.addEventListener('open-directo', (e) => {
         abrirDirecto(e.detail);
@@ -39,10 +47,36 @@ export function initDirecto() {
 
     document.getElementById('btn-back-partidos').addEventListener('click', cerrarDirecto);
 
+    document.getElementById('btn-config-acciones').addEventListener('click', abrirModalConfigAcciones);
+    document.getElementById('btn-close-modal-acciones').addEventListener('click', cerrarModalConfigAcciones);
+    document.getElementById('btn-done-modal-acciones').addEventListener('click', cerrarModalConfigAcciones);
+    document.getElementById('btn-save-accion').addEventListener('click', guardarNuevaAccion);
+    document.getElementById('btn-cancel-accion').addEventListener('click', resetFormAccion);
+
     // Controles de cronómetro
     document.getElementById('btn-crono-start').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-pause').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-next').addEventListener('click', avanzarPeriodo);
+
+    // Timeline Fullscreen
+    const btnTimelineExpand = document.getElementById('btn-timeline-expand');
+    if (btnTimelineExpand) {
+        btnTimelineExpand.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const container = document.getElementById('directo-timeline-container');
+            if (container.classList.contains('absolute')) {
+                container.classList.remove('absolute', 'inset-0', 'z-50', 'h-full');
+                container.classList.add('h-28', 'sm:h-36', 'hover:h-48', 'sm:hover:h-64');
+                btnTimelineExpand.innerHTML = '<i class="fa-solid fa-expand"></i>';
+                btnTimelineExpand.title = "Pantalla completa";
+            } else {
+                container.classList.add('absolute', 'inset-0', 'z-50', 'h-full');
+                container.classList.remove('h-28', 'sm:h-36', 'hover:h-48', 'sm:hover:h-64');
+                btnTimelineExpand.innerHTML = '<i class="fa-solid fa-compress"></i>';
+                btnTimelineExpand.title = "Minimizar";
+            }
+        });
+    }
 
     // Deseleccionar
     document.getElementById('btn-unselect-jugador').addEventListener('click', clearSeleccionJugador);
@@ -82,8 +116,10 @@ function abrirDirecto(id) {
         
         // Safety initialization if match doesn't have tracking fields yet
         if (!partidoObj.cronometro) {
-            partidoObj.enCampo = partidoObj.titulares || [];
             partidoObj.cronometro = { estado: 'pausado', ultimoInicioTimer: 0, tiempoAcumulado: 0, periodo: '1ª Parte' };
+        }
+        if (!partidoObj.enCampo) {
+            partidoObj.enCampo = partidoObj.titulares || [];
         }
 
         renderJugadoresEnCampo();
@@ -212,18 +248,44 @@ function updateCronoUI() {
 
     const btnStart = document.getElementById('btn-crono-start');
     const btnPause = document.getElementById('btn-crono-pause');
+    const btnNext = document.getElementById('btn-crono-next');
 
-    if (c.estado === 'corriendo') {
+    // Comprobar tiempo
+    const hoyStr = new Date().toLocaleDateString('en-CA');
+    const isPast = partidoObj.fecha && partidoObj.fecha < hoyStr;
+
+    // Comprobar si está finalizado
+    const isFinalizado = c.periodo === 'Finalizado' || isPast;
+    const campoContainer = document.getElementById('directo-jugadores-list');
+
+    if (isFinalizado) {
         btnStart.classList.add('hidden');
-        btnPause.classList.remove('hidden');
-        document.getElementById('directo-cronometro').classList.add('text-emerald-400');
-    } else {
         btnPause.classList.add('hidden');
-        btnStart.classList.remove('hidden');
+        btnNext.classList.add('hidden');
+        campoContainer.classList.add('pointer-events-none', 'opacity-70');
+        document.getElementById('directo-acciones-list').classList.add('opacity-50', 'pointer-events-none');
         document.getElementById('directo-cronometro').classList.remove('text-emerald-400');
+    } else {
+        btnNext.classList.remove('hidden');
+        campoContainer.classList.remove('pointer-events-none', 'opacity-70');
+        // El de acciones se controla por seleccionarJugador, no limpiar en update cíclico
+
+        if (c.estado === 'corriendo') {
+            btnStart.classList.add('hidden');
+            btnPause.classList.remove('hidden');
+            document.getElementById('directo-cronometro').classList.add('text-emerald-400');
+        } else {
+            btnPause.classList.add('hidden');
+            btnStart.classList.remove('hidden');
+            document.getElementById('directo-cronometro').classList.remove('text-emerald-400');
+        }
     }
 
-    document.getElementById('directo-titulo-partido').innerText = `${partidoObj.rival || 'Rival'} - Directo`;
+    const isLocal = partidoObj.esLocal !== false;
+    const rivalName = partidoObj.rival || 'Rival';
+    const miEquipo = todosLosEquipos.find(eq => eq.id === partidoObj.equipoId)?.nombre || 'Mi Equipo';
+    const matchTitle = isLocal ? `${miEquipo} vs ${rivalName}` : `${rivalName} vs ${miEquipo}`;
+    document.getElementById('directo-titulo-partido').innerText = `${matchTitle} - Directo`;
 }
 
 
@@ -290,10 +352,145 @@ function clearSeleccionJugador() {
 }
 
 
+// --------------------------------- CONFIG ACCIONES ---------------------------------
+function abrirModalConfigAcciones() {
+    // Si no tiene config propia, la inicializamos con los defaults
+    if (!partidoObj.configAcciones) {
+        partidoObj.configAcciones = JSON.parse(JSON.stringify(DEFAULT_ACCIONES));
+        // Save back to db so we have it
+        updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: partidoObj.configAcciones });
+    }
+    resetFormAccion();
+    renderListaConfigAcciones();
+    document.getElementById('modal-config-acciones').classList.remove('hidden');
+}
+
+function cerrarModalConfigAcciones() {
+    document.getElementById('modal-config-acciones').classList.add('hidden');
+    renderAcciones(); // Re-render main actions
+}
+
+function renderListaConfigAcciones() {
+    const container = document.getElementById('list-acciones-config');
+    const list = getAccionesPartido();
+    
+    container.innerHTML = list.map(acc => {
+        const isActive = acc.isActive !== false; // true by default
+        return `
+            <div class="flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 opacity-${isActive ? '100' : '50'}">
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                    <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
+                    <i class="fa-solid ${acc.icon} ${acc.color} w-6 text-center text-lg shrink-0"></i>
+                    <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''}</span>
+                </div>
+                <div class="flex gap-1 shrink-0">
+                    <button class="btn-edit-accion w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-delete-accion w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.chk-active-accion').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            const isActive = e.currentTarget.checked;
+            const idx = partidoObj.configAcciones.findIndex(a => a.id === id);
+            if (idx !== -1) {
+                partidoObj.configAcciones[idx].isActive = isActive;
+                await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: partidoObj.configAcciones });
+                renderListaConfigAcciones();
+            }
+        });
+    });
+
+    container.querySelectorAll('.btn-edit-accion').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            const acc = getAccionesPartido().find(a => a.id === id);
+            if (acc) {
+                document.getElementById('input-accion-id').value = acc.id;
+                document.getElementById('input-accion-nombre').value = acc.nombre;
+                document.getElementById('input-accion-icon').value = acc.icon;
+                document.getElementById('input-accion-color').value = acc.color;
+                document.getElementById('input-accion-isChange').checked = !!acc.isChange;
+                document.getElementById('title-form-accion').innerText = 'Editar Acción';
+                document.getElementById('btn-save-accion').innerText = 'Guardar Cambios';
+                document.getElementById('btn-cancel-accion').classList.remove('hidden');
+                document.getElementById('btn-save-accion').classList.remove('w-full');
+            }
+        });
+    });
+
+    container.querySelectorAll('.btn-delete-accion').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.currentTarget.getAttribute('data-id');
+            if (await confirmarAccion('¿Seguro que quieres eliminar esta acción?')) {
+                const newList = getAccionesPartido().filter(a => a.id !== id);
+                partidoObj.configAcciones = newList;
+                await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                renderListaConfigAcciones();
+            }
+        });
+    });
+}
+
+function resetFormAccion() {
+    document.getElementById('input-accion-id').value = '';
+    document.getElementById('input-accion-nombre').value = '';
+    document.getElementById('input-accion-icon').value = 'fa-bolt';
+    document.getElementById('input-accion-color').value = 'text-slate-500';
+    document.getElementById('input-accion-isChange').checked = false;
+    document.getElementById('title-form-accion').innerText = 'Nueva Acción';
+    document.getElementById('btn-save-accion').innerText = 'Añadir Acción';
+    document.getElementById('btn-cancel-accion').classList.add('hidden');
+    document.getElementById('btn-save-accion').classList.add('w-full');
+}
+
+async function guardarNuevaAccion() {
+    const idField = document.getElementById('input-accion-id').value;
+    const nombre = document.getElementById('input-accion-nombre').value.trim();
+    let icon = document.getElementById('input-accion-icon').value.trim();
+    const color = document.getElementById('input-accion-color').value;
+    const isChange = document.getElementById('input-accion-isChange').checked;
+
+    if (!nombre) {
+        mostrarNotificacion('El nombre es obligatorio', true);
+        return;
+    }
+    if (!icon) {
+        icon = isChange ? 'fa-arrows-rotate' : 'fa-bolt'; // default icon
+    }
+    
+    // Remove "fa-solid" just keep the icon name if user copied whole class
+    icon = icon.replace('fa-solid ', '').trim();
+    if (!icon.startsWith('fa-')) icon = 'fa-' + icon;
+
+    let newList = [...getAccionesPartido()];
+
+    if (idField) {
+        // Edit
+        const idx = newList.findIndex(a => a.id === idField);
+        if (idx !== -1) {
+            newList[idx] = { ...newList[idx], nombre, icon, color, isChange };
+        }
+    } else {
+        // Add
+        const newId = 'acc_' + Date.now().toString(36);
+        newList.push({ id: newId, nombre, icon, color, isChange, isActive: true });
+    }
+
+    partidoObj.configAcciones = newList;
+    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+    resetFormAccion();
+    renderListaConfigAcciones();
+}
+
 // --------------------------------- ACCIONES ---------------------------------
 function renderAcciones() {
     const container = document.getElementById('directo-acciones-list');
-    container.innerHTML = ACCIONES.map(acc => {
+    const list = getAccionesPartido().filter(acc => acc.isActive !== false);
+    container.innerHTML = list.map(acc => {
         let btnCls = 'bg-white border hover:bg-slate-50';
         if (acc.isChange) btnCls = 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-700';
 
@@ -316,7 +513,7 @@ function renderAcciones() {
 function manejarClickAccion(accionId) {
     if (!jugadorSeleccionadoId || !partidoIdActivo) return;
     
-    const acc = ACCIONES.find(a => a.id === accionId);
+    const acc = getAccionesPartido().find(a => a.id === accionId);
     if (!acc) return;
 
     if (acc.isChange) {
@@ -417,15 +614,26 @@ async function ejecutarCambio() {
     });
 
     cerrarModalCambio();
-
+    
     // 2. Modificar EnCampo en el partido
     try {
+        let nuevosEnCampo = [...(partidoObj.enCampo || [])];
+        
+        // Quitar al que sale
+        if (jSaleId) {
+            nuevosEnCampo = nuevosEnCampo.filter(id => id !== jSaleId);
+        }
+        
+        // Añadir al que entra
+        if (jEntraId && !nuevosEnCampo.includes(jEntraId)) {
+            nuevosEnCampo.push(jEntraId);
+        }
+
         await updateDoc(doc(db, 'partidos', partidoIdActivo), {
-            enCampo: arrayRemove(jSaleId)
+            enCampo: nuevosEnCampo
         });
-        await updateDoc(doc(db, 'partidos', partidoIdActivo), {
-            enCampo: arrayUnion(jEntraId)
-        });
+        
+        clearSeleccionJugador();
     } catch(e) {
         console.error("Error al actualizar enCampo:", e);
     }

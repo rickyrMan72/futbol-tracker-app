@@ -6,6 +6,8 @@ import { todosLosEquipos } from './mod-equipos.js';
 export let todosLosPartidos = [];
 const contenedor = document.getElementById('lista-partidos-container');
 
+let mostrarHistoricos = false;
+
 export function initPartidos() {
     onSnapshot(collection(db, 'partidos'), (snapshot) => {
         todosLosPartidos = [];
@@ -16,6 +18,17 @@ export function initPartidos() {
             const dateB = new Date(`${b.fecha}T${b.hora}`);
             return dateA - dateB;
         });
+        renderizarPartidos();
+    });
+
+    document.getElementById('btn-toggle-historicos').addEventListener('click', () => {
+        mostrarHistoricos = !mostrarHistoricos;
+        const btn = document.getElementById('btn-toggle-historicos');
+        if (mostrarHistoricos) {
+            btn.innerHTML = '<i class="fa-solid fa-eye-slash mr-2"></i> Ocultar Históricos';
+        } else {
+            btn.innerHTML = '<i class="fa-solid fa-clock-rotate-left mr-2"></i> Ver Históricos';
+        }
         renderizarPartidos();
     });
 
@@ -64,6 +77,7 @@ export function initPartidos() {
 
         const data = {
             rival: document.getElementById('input-partido-rival').value,
+            esLocal: document.getElementById('input-partido-local').checked,
             escudoRival: document.getElementById('input-partido-escudo-rival').value || '',
             fecha: document.getElementById('input-partido-fecha').value,
             hora: document.getElementById('input-partido-hora').value,
@@ -141,14 +155,40 @@ export function renderizarPartidos() {
     const partidosFuturos = partidosEquipo.filter(p => new Date(`${p.fecha}T${p.hora}`) >= ahora);
     const idProximo = partidosFuturos.length > 0 ? partidosFuturos[0].id : null;
 
-    partidosEquipo.forEach(par => {
+    let partidosToShow = partidosEquipo;
+    if (!mostrarHistoricos) {
+        partidosToShow = partidosEquipo.filter(p => {
+             const fechaPartido = new Date(`${p.fecha}T${p.hora}`);
+             const isPast = fechaPartido < ahora;
+             const isToday = p.fecha === hoyStr;
+             return !isPast || isToday;
+        });
+    }
+
+    if (partidosToShow.length === 0) {
+        contenedor.innerHTML = `<div class="col-span-full py-10 text-center text-slate-400">No hay partidos ${mostrarHistoricos ? '' : 'próximos '}para mostrar</div>`;
+    }
+
+    partidosToShow.forEach(par => {
         const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
         const isPast = fechaPartido < ahora;
         const isToday = par.fecha === hoyStr;
         const isNext = par.id === idProximo;
 
+        const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
+
+        let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
+        let actionTitle = 'Jugar / Ver Directo';
+        let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
+
         let cardClasses = 'bg-white rounded-xl border p-5 mt-3 relative flex flex-col group transition-all duration-300 hover:shadow-md';
         let statusBadge = '';
+
+        if (isFinalizadoMatch) {
+            actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
+            actionTitle = 'Consultar Datos';
+            actionColorClass = 'bg-blue-500 hover:bg-blue-600';
+        }
 
         if (isPast && !isToday) {
             cardClasses += ' grayscale opacity-70 border-slate-200';
@@ -169,12 +209,28 @@ export function renderizarPartidos() {
         const nomLocal = equipoActual?.nombre || 'Mi Equipo';
         const nomRival = par.rival || 'Rival';
 
+        let equipoIzquierdaEscudo, equipoIzquierdaNombre;
+        let equipoDerechaEscudo, equipoDerechaNombre;
+
+        // Si esLocal es false (visitante), Rival va a la izquierda y Mi Equipo a la derecha
+        if (par.esLocal === false) {
+            equipoIzquierdaEscudo = escudoRivalImg;
+            equipoIzquierdaNombre = nomRival;
+            equipoDerechaEscudo = escudoLocal;
+            equipoDerechaNombre = nomLocal;
+        } else {
+            equipoIzquierdaEscudo = escudoLocal;
+            equipoIzquierdaNombre = nomLocal;
+            equipoDerechaEscudo = escudoRivalImg;
+            equipoDerechaNombre = nomRival;
+        }
+
         const card = document.createElement('div');
         card.className = cardClasses;
         card.innerHTML = `
             ${statusBadge}
             <div class="absolute top-2 left-2 flex gap-1 z-20">
-                <button class="btn-play-par w-8 h-8 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="Jugar/Ver Directo"><i class="fa-solid fa-play ml-0.5"></i></button>
+                <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="${actionTitle}">${actionIcon}</button>
             </div>
             <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
                 <button class="btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
@@ -187,13 +243,13 @@ export function renderizarPartidos() {
 
             <div class="flex items-center justify-between mb-4">
                 <div class="flex flex-col items-center flex-1 w-1/3">
-                    ${escudoLocal}
-                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${nomLocal}</span>
+                    ${equipoIzquierdaEscudo}
+                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoIzquierdaNombre}</span>
                 </div>
                 <div class="font-black text-xl text-slate-300 flex-shrink-0 px-4">VS</div>
                 <div class="flex flex-col items-center flex-1 w-1/3">
-                    ${escudoRivalImg}
-                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${nomRival}</span>
+                    ${equipoDerechaEscudo}
+                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoDerechaNombre}</span>
                 </div>
             </div>
 
@@ -225,6 +281,7 @@ export function renderizarPartidos() {
 
         card.querySelector('.btn-edit-par').addEventListener('click', () => {
             document.getElementById('input-partido-rival').value = par.rival;
+            document.getElementById('input-partido-local').checked = par.esLocal !== false;
             document.getElementById('input-partido-escudo-rival').value = par.escudoRival || '';
             document.getElementById('input-partido-fecha').value = par.fecha;
             document.getElementById('input-partido-hora').value = par.hora;

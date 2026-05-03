@@ -1,6 +1,6 @@
 export function mostrarNotificacion(mensaje, esError = false) {
     const alerta = document.createElement('div');
-    alerta.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-xl fade-in z-50 ${esError ? 'bg-red-500' : 'bg-slate-800'}`;
+    alerta.className = `fixed bottom-4 right-4 text-white px-6 py-3 rounded-lg shadow-xl fade-in z-[70] ${esError ? 'bg-red-500' : 'bg-slate-800'}`;
     alerta.innerHTML = `<i class="fa-solid ${esError ? 'fa-triangle-exclamation' : 'fa-check-circle'} mr-2"></i> ${mensaje}`;
     document.body.appendChild(alerta);
     setTimeout(() => alerta.remove(), 3000);
@@ -12,7 +12,7 @@ export function confirmarAccion(mensaje, textoConfirmar = "Eliminar", colorConfi
 
     return new Promise(resolve => {
         const overlay = document.createElement('div');
-        overlay.className = 'confirm-overlay-dialog fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex items-center justify-center p-4 fade-in';
+        overlay.className = 'confirm-overlay-dialog fixed inset-0 bg-slate-900 bg-opacity-50 z-[70] flex items-center justify-center p-4 fade-in';
         overlay.innerHTML = `
             <div class="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
                 <div class="p-5 flex flex-col items-center text-center">
