@@ -9,6 +9,7 @@ const contenedor = document.getElementById('lista-jugadores-container');
 export function setEquipoActivo(id) {
     equipoIdActivo = id;
     renderizar();
+    document.dispatchEvent(new Event('equipoModificado'));
 }
 
 export function initJugadores() {

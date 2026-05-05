@@ -93,6 +93,13 @@ export function initPartidos() {
         try { 
             const editId = document.getElementById('form-partido').dataset.editId;
             if (editId) {
+                const existingPartido = todosLosPartidos.find(p => p.id === editId);
+                const hasStarted = existingPartido && existingPartido.cronometro && 
+                                   (existingPartido.cronometro.tiempoAcumulado > 0 || existingPartido.cronometro.estado !== 'pausado');
+                
+                if (!hasStarted) {
+                    data.enCampo = titulares;
+                }
                 await updateDoc(doc(db, 'partidos', editId), data);
                 mostrarNotificacion("Partido actualizado"); 
             } else {
@@ -194,7 +201,7 @@ export function renderizarPartidos() {
             cardClasses += ' grayscale opacity-70 border-slate-200';
             statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">FINALIZADO</span>';
         } else if (isNext) {
-            cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg scale-[1.02] z-10 ring-2 ring-amber-400 border-transparent';
+            cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg relative z-10 ring-2 ring-amber-400';
             statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">PRÓXIMO PARTIDO</span>';
         } else if (isToday) {
             cardClasses += ' border-blue-400 shadow-blue-100 shadow-md';

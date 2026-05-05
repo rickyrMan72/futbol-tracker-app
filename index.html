@@ -138,7 +138,7 @@
                     <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
                     <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para gestionar partidos.</p>
                 </div>
-                <div class="space-y-4 hidden flex-1 overflow-y-auto pb-6" id="lista-partidos-container"></div>
+                <div class="space-y-4 hidden flex-1 overflow-y-auto overflow-x-hidden pb-6 px-3 -mx-3" id="lista-partidos-container"></div>
             </div>
             
             <!-- VISTA 6: DIRECTO (EFEMÉRIDES) -->
@@ -202,62 +202,67 @@
                 </div>
             </div>
             <!-- VISTA 7: PIZARRA -->
-            <div id="view-pizarra" class="app-view hidden fade-in h-full flex flex-col">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 shrink-0">
+            <div id="view-pizarra" class="app-view hidden fade-in h-full flex flex-col w-full overflow-y-auto overflow-x-hidden pb-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 shrink-0 gap-3 w-full">
                     <div>
-                        <h3 class="font-bold text-xl text-slate-800">Pizarra Táctica (Fútbol 7)</h3>
-                        <p class="text-slate-500 text-sm">Cambia la formación y arrastra a los jugadores.</p>
+                        <h3 id="pizarra-titulo-campo" class="font-bold text-xl text-slate-800">Pizarra Táctica</h3>
+                        <p class="text-slate-500 text-sm">Prepara tus jugadas y tácticas paso a paso.</p>
                     </div>
-                    <div class="mt-2 sm:mt-0 flex gap-2">
-                        <select id="pizarra-formacion" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 focus:border-emerald-500">
-                            <option value="1-2-1-2-1">1-2-1-2-1</option>
-                            <option value="1-3-2-1">1-3-2-1</option>
-                            <option value="1-2-3-1">1-2-3-1</option>
-                            <option value="1-3-1-2">1-3-1-2</option>
-                            <option value="1-2-2-2">1-2-2-2</option>
-                        </select>
-                        <button id="btn-pizarra-reset" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors" title="Reiniciar posiciones"><i class="fa-solid fa-rotate-left"></i></button>
-                        <button id="btn-pizarra-fullscreen" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
+                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto justify-start md:justify-end">
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <select id="pizarra-jugada-selector" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 w-1/2 sm:w-32 lg:w-40 truncate shrink-0">
+                                <option value="">-- Nueva --</option>
+                            </select>
+                            <input type="text" id="pizarra-jugada-nombre" placeholder="Nombre..." class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 w-1/2 sm:w-32 lg:w-40 min-w-0 shrink-0">
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-2 shrink-0">
+                            <button id="btn-pizarra-save" class="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium transition-colors border border-emerald-200 flex items-center justify-center flex-1 sm:flex-none shadow-sm" title="Guardar Jugada">
+                                <i class="fa-solid fa-floppy-disk"></i><span class="ml-1"> Guardar</span>
+                            </button>
+                            <button id="btn-pizarra-delete-jugada" class="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center justify-center shadow-sm hidden" title="Eliminar Jugada">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Separator -->
+                        <div class="hidden md:block w-px h-6 bg-slate-300 mx-1 shrink-0"></div>
+                        
+                        <div class="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 shrink-0">
+                            <select id="pizarra-formacion" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 shrink-0 min-w-[120px]" title="Táctica Inicial">
+                                <!-- filled by JS -->
+                            </select>
+                            <button id="btn-pizarra-rotate" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Girar Campo 90º"><i class="fa-solid fa-rotate-right"></i></button>
+                            <button id="btn-pizarra-reset" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Reiniciar posiciones"><i class="fa-solid fa-rotate-left"></i></button>
+                            <button id="btn-pizarra-fullscreen" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex-1 min-h-[400px] border-2 border-emerald-500 rounded-xl relative overflow-hidden bg-emerald-600 drop-zone shadow-inner" id="pizarra-campo">
-                    <!-- SVG Campo -->
-                    <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-40" viewBox="0 0 60 90" preserveAspectRatio="none">
-                        <!-- Borde exterior -->
-                        <rect x="2" y="2" width="56" height="86" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Línea central -->
-                        <line x1="2" y1="45" x2="58" y2="45" stroke="white" stroke-width="0.4"></line>
-                        <!-- Círculo central -->
-                        <circle cx="30" cy="45" r="7" fill="none" stroke="white" stroke-width="0.4"></circle>
-                        <!-- Punto central -->
-                        <circle cx="30" cy="45" r="0.5" fill="white"></circle>
-                        
-                        <!-- Portería superior -->
-                        <rect x="26" y="0" width="8" height="2" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Área chica superior -->
-                        <rect x="21" y="2" width="18" height="4.5" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Área grande superior -->
-                        <rect x="14" y="2" width="32" height="12" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Punto de penalti superior (aprox 9m) -->
-                        <circle cx="30" cy="11" r="0.5" fill="white"></circle>
-                        <!-- Semicírculo superior (intersección en y=14) -->
-                        <!-- Radio 7. Centro en (30, 11). (x-30)^2 + (14-11)^2 = 49 -> (x-30)^2 + 9 = 49 -> x = 30 +/- 6.32 -> x = 23.68, 36.32 -->
-                        <path d="M 23.68 14 A 7 7 0 0 0 36.32 14" fill="none" stroke="white" stroke-width="0.4"></path>
+                <div class="flex-1 min-h-[300px] border-2 border-emerald-500 rounded-xl relative overflow-hidden bg-emerald-600 drop-zone shadow-inner p-2 sm:p-4" id="pizarra-campo-container">
+                    <div class="w-full h-full flex items-center justify-center relative">
+                        <div id="pizarra-campo" class="relative transition-all duration-300 shadow-2xl rounded" style="max-width: 100%; max-height: 100%; aspect-ratio: 68/105; width: auto; height: 100%;">
+                            <div id="pizarra-svg-wrapper" class="absolute inset-0 w-full h-full pointer-events-none opacity-40 flex items-center justify-center">
+                                <!-- SVG here. Make sure SVG scales with 100% width/height -->
+                            </div>
+                            <!-- Fichas (generadas dinámicamente) -->
+                        </div>
+                    </div>
+                </div>
 
-                        <!-- Portería inferior -->
-                        <rect x="26" y="88" width="8" height="2" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Área chica inferior -->
-                        <rect x="21" y="83.5" width="18" height="4.5" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Área grande inferior -->
-                        <rect x="14" y="76" width="32" height="12" fill="none" stroke="white" stroke-width="0.4"></rect>
-                        <!-- Punto de penalti inferior -->
-                        <circle cx="30" cy="79" r="0.5" fill="white"></circle>
-                        <!-- Semicírculo inferior -->
-                        <path d="M 36.32 76 A 7 7 0 0 0 23.68 76" fill="none" stroke="white" stroke-width="0.4"></path>
-                    </svg>
-                    
-                    <!-- Fichas (generadas dinámicamente) -->
+                <!-- Controles de Jugada (Pasos) -->
+                <div class="mt-4 bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center justify-between shrink-0 flex-wrap gap-3">
+                    <div class="flex items-center gap-2">
+                        <button id="pizarra-btn-play" class="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full flex items-center justify-center transition-colors shadow-sm" title="Reproducir Jugada"><i class="fa-solid fa-play ml-1"></i></button>
+                        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                        <button id="pizarra-btn-prev" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors"><i class="fa-solid fa-backward-step"></i></button>
+                        <span id="pizarra-step-display" class="font-mono font-bold text-slate-700 min-w-[3rem] text-center">Paso 1</span>
+                        <button id="pizarra-btn-next" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors"><i class="fa-solid fa-forward-step"></i></button>
+                        <button id="pizarra-btn-add" class="w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full flex items-center justify-center transition-colors ml-2" title="Guardar Posiciones como Nuevo Paso"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="pizarra-btn-del" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center hidden" title="Eliminar este paso"><i class="fa-solid fa-trash mr-1"></i> Eliminar Paso</button>
+                    </div>
                 </div>
             </div>
 
@@ -421,7 +426,8 @@
                                     <option value="Fútbol 7">Fútbol 7</option>
                                 </select>
                                 <select id="pizarra-fondo" class="w-full px-1 py-2 border rounded-lg text-slate-700 bg-white focus:ring-emerald-500 text-sm text-left">
-                                    <option value="completo">Completo</option>
+                                    <option value="completo">Completo F11</option>
+                                    <option value="completo-f7">Completo F7</option>
                                     <option value="medio">Medio</option>
                                     <option value="area">Área</option>
                                     <option value="cuadrado">Cuadrado</option>
