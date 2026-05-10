@@ -112,16 +112,5 @@ export function initNavigation() {
 }
 
 export function initChart() {
-    const ctx = document.getElementById('rendimientoChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
-            datasets: [
-                { label: 'Distancia (Km)', data: [4.2, 7.8, 8.5, 5.1, 3.2], backgroundColor: 'rgba(16, 185, 129, 0.8)', borderRadius: 4 },
-                { type: 'line', label: 'Carga (RPE)', data: [3, 8, 7, 5, 2], borderColor: 'rgba(59, 130, 246, 1)', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.3, fill: true }
-            ]
-        },
-        options: { maintainAspectRatio: false, responsive: true, scales: { y: { beginAtZero: true } } }
-    });
+    // Chart initialization will be dynamic based on last match
 }

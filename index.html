@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -81,8 +82,8 @@
                         <p class="text-lg font-bold text-slate-800">Presión Alta (65%)</p>
                     </div>
                 </div>
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex justify-between items-center mb-6"><h3 class="text-lg font-bold text-slate-800">Carga Física Semanal (GPS)</h3></div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hidden" id="dash-chart-card">
+                    <div class="flex justify-between items-center mb-6"><h3 class="text-lg font-bold text-slate-800" id="dash-chart-title">Datos del Último Partido</h3></div>
                     <div class="chart-container"><canvas id="rendimientoChart"></canvas></div>
                 </div>
             </div>
@@ -155,6 +156,16 @@
                         <div class="text-3xl sm:text-4xl font-mono font-bold tracking-wider leading-none" id="directo-cronometro">00:00</div>
                         <div class="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest font-semibold leading-none" id="directo-periodo">1ª Parte</div>
                     </div>
+                    
+                    <div class="flex flex-col items-center justify-center relative group cursor-pointer" id="btn-add-gol-rival" title="Añadir Gol Rival (Click aquí)">
+                        <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">Marcador <i class="fa-solid fa-plus text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i></div>
+                        <div class="flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-lg">
+                            <span class="text-xl sm:text-2xl font-bold text-emerald-400" id="directo-marcador-mio">0</span>
+                            <span class="text-slate-500">-</span>
+                            <span class="text-xl sm:text-2xl font-bold text-rose-400" id="directo-marcador-rival">0</span>
+                        </div>
+                    </div>
+
                     <div class="flex gap-2 items-center">
                         <button id="btn-crono-start" class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 hover:bg-emerald-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg" title="Iniciar/Reanudar"><i class="fa-solid fa-play ml-1"></i></button>
                         <button id="btn-crono-pause" class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 hover:bg-amber-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg hidden" title="Pausar"><i class="fa-solid fa-pause"></i></button>
@@ -291,6 +302,7 @@
                         <select id="input-accion-icon" class="px-3 py-2 border rounded-lg text-sm w-full">
                             <option value="fa-bolt">Rayo (fa-bolt)</option>
                             <option value="fa-futbol">Balón (fa-futbol)</option>
+                            <option value="fa-square">Tarjeta (fa-square)</option>
                             <option value="fa-crown">Corona (fa-crown)</option>
                             <option value="fa-handshake">Apretón de manos (fa-handshake)</option>
                             <option value="fa-bullseye">Diana (fa-bullseye)</option>
@@ -322,10 +334,11 @@
                             <option value="text-pink-500" class="text-pink-500 font-bold">Rosa</option>
                             <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
                         </select>
-                        <div class="flex items-center space-x-2">
-                            <input type="checkbox" id="input-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
-                            <label for="input-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
-                        </div>
+                        <input type="number" step="0.01" min="-5" max="5" id="input-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
+                    </div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <input type="checkbox" id="input-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
+                        <label for="input-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
                     </div>
                     <div class="flex gap-2">
                         <button id="btn-cancel-accion" class="w-1/3 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 hidden">Cancelar</button>
@@ -395,6 +408,78 @@
                 </form>
             </div>
             <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-partido" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button><button id="btn-save-modal-partido" class="px-4 py-2 bg-amber-600 text-white rounded-lg">Guardar Partido</button></div>
+        </div>
+    </div>
+
+    <!-- MODALES ESTADISTICAS -->
+    <div id="modal-estadisticas" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
+                <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-chart-line mr-2"></i> Estadísticas del Partido</h3>
+                <button id="btn-close-modal-estadisticas" class="text-blue-400 hover:text-blue-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6" id="stats-content-to-export">
+                <!-- Info Partido (visible only in PDF or populated always) -->
+                <div id="stats-match-info" class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-center gap-6 mb-2">
+                    <!-- Loaded dynamically -->
+                </div>
+
+                <!-- Resumen Superior -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="stats-global-container">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="stats-export-grid">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 break-inside-avoid">
+                        <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Rendimiento por Jugador</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 whitespace-nowrap">
+                                    <tr>
+                                        <th class="px-3 py-2 rounded-tl-lg">Jugador</th>
+                                        <th class="px-3 py-2 text-center text-blue-500" title="Minutos jugados"><i class="fa-regular fa-clock"></i></th>
+                                        <th class="px-3 py-2 text-center text-emerald-400" title="Tiros a puerta"><i class="fa-solid fa-bullseye"></i></th>
+                                        <th class="px-3 py-2 text-center text-slate-400" title="Tiros fuera"><i class="fa-solid fa-xmark"></i></th>
+                                        <th class="px-3 py-2 text-center text-emerald-500" title="Goles"><i class="fa-solid fa-futbol"></i></th>
+                                        <th class="px-3 py-2 text-center text-amber-500" title="Asistencias"><i class="fa-solid fa-handshake"></i></th>
+                                        <th class="px-3 py-2 text-center text-indigo-500 rounded-tr-lg" title="Valoración"><i class="fa-solid fa-star"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stats-players-list" class="divide-y divide-slate-100 whitespace-nowrap">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col gap-6">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hidden break-inside-avoid" id="stats-chart-wrapper">
+                            <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Distribución de Acciones</h4>
+                            <div class="w-full h-64 flex items-center justify-center">
+                                <canvas id="stats-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hidden break-inside-avoid" id="stats-temporal-chart-wrapper">
+                            <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Evolución de Acciones</h4>
+                            <div class="w-full h-64 flex items-center justify-center">
+                                <canvas id="stats-temporal-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full break-inside-avoid" id="stats-timeline-panel">
+                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Timeline del Partido</h4>
+                    <div class="overflow-y-auto max-h-[400px] flex-1 pr-2 pl-4 py-2" id="stats-timeline-scroll">
+                        <div class="relative space-y-4 border-l-2 border-slate-200 py-2" id="stats-timeline-container">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex flex-wrap justify-end gap-3">
+                <button id="btn-export-pdf" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir PDF</button>
+                <button id="btn-share-modal-estadisticas" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir Texto</button>
+                <button id="btn-done-modal-estadisticas" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors">Volver</button>
+            </div>
         </div>
     </div>
 

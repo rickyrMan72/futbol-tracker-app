@@ -15,22 +15,22 @@ let jugadorSeleccionadoId = null;
 let accionCambioPendiente = null;
 
 export const DEFAULT_ACCIONES = [
-    { id: 'gol-pie', nombre: 'Gol con el pie', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
-    { id: 'gol-cabeza', nombre: 'Gol de cabeza', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
-    { id: 'gol-falta', nombre: 'Gol de falta', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true },
-    { id: 'gol-olimpico', nombre: 'Gol Olímpico', icon: 'fa-crown', color: 'text-amber-500', isPositive: true },
-    { id: 'asistencia', nombre: 'Asistencia', icon: 'fa-handshake', color: 'text-blue-500', isPositive: true },
-    { id: 'tiro-puerta', nombre: 'Tiro a puerta', icon: 'fa-bullseye', color: 'text-emerald-400' },
-    { id: 'tiro-fuera', nombre: 'Tiro fuera', icon: 'fa-xmark', color: 'text-slate-500' },
-    { id: 'recuperacion', nombre: 'Recuperación', icon: 'fa-magnet', color: 'text-emerald-500', isPositive: true },
-    { id: 'perdida', nombre: 'Pérdida', icon: 'fa-arrow-right-from-bracket', color: 'text-rose-400' },
-    { id: 'falta-cometida', nombre: 'Falta Cometida', icon: 'fa-gavel', color: 'text-amber-600' },
-    { id: 'falta-recibida', nombre: 'Falta Recibida', icon: 'fa-user-nurse', color: 'text-blue-400' },
-    { id: 'parada', nombre: 'Parada', icon: 'fa-hand', color: 'text-emerald-500', isPositive: true },
-    { id: 'amarilla', nombre: 'Tarjeta Amarilla', icon: 'fa-square', color: 'text-amber-500', isPositive: false },
-    { id: 'roja', nombre: 'Tarjeta Roja', icon: 'fa-square', color: 'text-red-500', isPositive: false },
-    { id: 'sustitucion', nombre: 'Sustituido', icon: 'fa-arrows-rotate', color: 'text-slate-500', isChange: true },
-    { id: 'sustitucion-lesion', nombre: 'Sustit. por Lesión', icon: 'fa-truck-medical', color: 'text-red-500', isChange: true }
+    { id: 'gol-pie', nombre: 'Gol con el pie', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
+    { id: 'gol-cabeza', nombre: 'Gol de cabeza', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
+    { id: 'gol-falta', nombre: 'Gol de falta', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
+    { id: 'gol-olimpico', nombre: 'Gol Olímpico', icon: 'fa-crown', color: 'text-amber-500', isPositive: true, score: 3 },
+    { id: 'asistencia', nombre: 'Asistencia', icon: 'fa-handshake', color: 'text-blue-500', isPositive: true, score: 2 },
+    { id: 'tiro-puerta', nombre: 'Tiro a puerta', icon: 'fa-bullseye', color: 'text-emerald-400', score: 1 },
+    { id: 'tiro-fuera', nombre: 'Tiro fuera', icon: 'fa-xmark', color: 'text-slate-500', score: 0.5 },
+    { id: 'recuperacion', nombre: 'Recuperación', icon: 'fa-magnet', color: 'text-emerald-500', isPositive: true, score: 0.33 },
+    { id: 'perdida', nombre: 'Pérdida', icon: 'fa-arrow-right-from-bracket', color: 'text-rose-400', score: -0.5 },
+    { id: 'falta-cometida', nombre: 'Falta Cometida', icon: 'fa-gavel', color: 'text-amber-600', score: 0 },
+    { id: 'falta-recibida', nombre: 'Falta Recibida', icon: 'fa-user-nurse', color: 'text-blue-400', score: 0 },
+    { id: 'parada', nombre: 'Parada', icon: 'fa-hand', color: 'text-emerald-500', isPositive: true, score: 1 },
+    { id: 'amarilla', nombre: 'Tarjeta Amarilla', icon: 'fa-square', color: 'text-amber-500', isPositive: false, score: -1 },
+    { id: 'roja', nombre: 'Tarjeta Roja', icon: 'fa-square', color: 'text-red-500', isPositive: false, score: -3 },
+    { id: 'sustitucion', nombre: 'Sustituido', icon: 'fa-arrows-rotate', color: 'text-slate-500', isChange: true, score: 0 },
+    { id: 'sustitucion-lesion', nombre: 'Sustit. por Lesión', icon: 'fa-truck-medical', color: 'text-red-500', isChange: true, score: 0 }
 ];
 
 export function getAccionesPartido() {
@@ -57,6 +57,24 @@ export function initDirecto() {
     document.getElementById('btn-crono-start').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-pause').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-next').addEventListener('click', avanzarPeriodo);
+
+    document.getElementById('btn-add-gol-rival')?.addEventListener('click', async () => {
+        if (!partidoIdActivo) return;
+        if (await confirmarAccion("¿Añadir un gol al rival?")) {
+            const msActuales = calcularMsActuales();
+            await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+                tipo: 'gol-rival',
+                nombre: 'Gol Rival',
+                icon: 'fa-futbol',
+                color: 'text-rose-400',
+                tiempoAnotado: formatoCrono(msActuales),
+                minutoMs: msActuales,
+                periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
+                timestamp: Date.now()
+            });
+            mostrarNotificacion("Gol en contra registrado");
+        }
+    });
 
     // Timeline Fullscreen
     const btnTimelineExpand = document.getElementById('btn-timeline-expand');
@@ -381,7 +399,7 @@ function renderListaConfigAcciones() {
                 <div class="flex items-center gap-3 flex-1 min-w-0">
                     <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
                     <i class="fa-solid ${acc.icon} ${acc.color} w-6 text-center text-lg shrink-0"></i>
-                    <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''}</span>
+                    <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''}</span>
                 </div>
                 <div class="flex gap-1 shrink-0">
                     <button class="btn-edit-accion w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
@@ -414,6 +432,7 @@ function renderListaConfigAcciones() {
                 document.getElementById('input-accion-icon').value = acc.icon;
                 document.getElementById('input-accion-color').value = acc.color;
                 document.getElementById('input-accion-isChange').checked = !!acc.isChange;
+                document.getElementById('input-accion-score').value = acc.score !== undefined ? acc.score : '';
                 document.getElementById('title-form-accion').innerText = 'Editar Acción';
                 document.getElementById('btn-save-accion').innerText = 'Guardar Cambios';
                 document.getElementById('btn-cancel-accion').classList.remove('hidden');
@@ -441,6 +460,7 @@ function resetFormAccion() {
     document.getElementById('input-accion-icon').value = 'fa-bolt';
     document.getElementById('input-accion-color').value = 'text-slate-500';
     document.getElementById('input-accion-isChange').checked = false;
+    document.getElementById('input-accion-score').value = '';
     document.getElementById('title-form-accion').innerText = 'Nueva Acción';
     document.getElementById('btn-save-accion').innerText = 'Añadir Acción';
     document.getElementById('btn-cancel-accion').classList.add('hidden');
@@ -453,6 +473,8 @@ async function guardarNuevaAccion() {
     let icon = document.getElementById('input-accion-icon').value.trim();
     const color = document.getElementById('input-accion-color').value;
     const isChange = document.getElementById('input-accion-isChange').checked;
+    const scoreVal = document.getElementById('input-accion-score').value.trim();
+    const score = scoreVal !== '' ? parseFloat(scoreVal) : undefined;
 
     if (!nombre) {
         mostrarNotificacion('El nombre es obligatorio', true);
@@ -473,11 +495,15 @@ async function guardarNuevaAccion() {
         const idx = newList.findIndex(a => a.id === idField);
         if (idx !== -1) {
             newList[idx] = { ...newList[idx], nombre, icon, color, isChange };
+            if (score !== undefined) newList[idx].score = score;
+            else delete newList[idx].score;
         }
     } else {
         // Add
         const newId = 'acc_' + Date.now().toString(36);
-        newList.push({ id: newId, nombre, icon, color, isChange, isActive: true });
+        const newAcc = { id: newId, nombre, icon, color, isChange, isActive: true };
+        if (score !== undefined) newAcc.score = score;
+        newList.push(newAcc);
     }
 
     partidoObj.configAcciones = newList;
@@ -640,8 +666,41 @@ async function ejecutarCambio() {
 }
 
 
+function updateMarcadorDirecto() {
+    let golesMios = 0;
+    let golesRival = 0;
+    efemeridesList.forEach(e => {
+        const eTipo = e.tipo || e.accionId;
+        if (eTipo && typeof eTipo === 'string' && eTipo.startsWith('gol-')) {
+            if (eTipo === 'gol-rival') {
+                golesRival++;
+            } else {
+                golesMios++;
+            }
+        }
+    });
+    const lblMio = document.getElementById('directo-marcador-mio');
+    const lblRival = document.getElementById('directo-marcador-rival');
+    if (lblMio) lblMio.innerText = golesMios;
+    if (lblRival) lblRival.innerText = golesRival;
+    
+    if (partidoObj && partidoIdActivo) {
+        let resultadoStr;
+        if (partidoObj.esLocal === false) {
+            resultadoStr = `${golesRival} - ${golesMios}`;
+        } else {
+            resultadoStr = `${golesMios} - ${golesRival}`;
+        }
+        
+        if (partidoObj.resultado !== resultadoStr) {
+            updateDoc(doc(db, 'partidos', partidoIdActivo), { resultado: resultadoStr }).catch(e => console.error(e));
+        }
+    }
+}
+
 // --------------------------------- TIMELINE (EFEMÉRIDES) ---------------------------------
 function renderEfemerides() {
+    updateMarcadorDirecto();
     const container = document.getElementById('directo-timeline');
     
     if (efemeridesList.length === 0) {
