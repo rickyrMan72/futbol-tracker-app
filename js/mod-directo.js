@@ -392,11 +392,12 @@ function renderListaConfigAcciones() {
     const container = document.getElementById('list-acciones-config');
     const list = getAccionesPartido();
     
-    container.innerHTML = list.map(acc => {
+    container.innerHTML = list.map((acc, index) => {
         const isActive = acc.isActive !== false; // true by default
         return `
-            <div class="flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 opacity-${isActive ? '100' : '50'}">
-                <div class="flex items-center gap-3 flex-1 min-w-0">
+            <div class="draggable-accion flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 opacity-${isActive ? '100' : '50'}" draggable="true" data-id="${acc.id}" data-index="${index}">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                    <i class="fa-solid fa-grip-vertical text-slate-300 hover:text-slate-500 cursor-grab px-1" title="Arrastrar para reordenar"></i>
                     <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
                     <i class="fa-solid ${acc.icon} ${acc.color} w-6 text-center text-lg shrink-0"></i>
                     <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''}</span>
@@ -408,6 +409,71 @@ function renderListaConfigAcciones() {
             </div>
         `;
     }).join('');
+
+    let draggedItemIdx = null;
+
+    container.querySelectorAll('.draggable-accion').forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            draggedItemIdx = parseInt(item.getAttribute('data-index'));
+            e.dataTransfer.effectAllowed = 'move';
+            // Wait for next tick to add class so it doesn't immediately hide the dragged ghost
+            setTimeout(() => item.classList.add('opacity-40', 'border-dashed', 'border-slate-400'), 0);
+        });
+
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            
+            const targetItem = e.target.closest('.draggable-accion');
+            if (targetItem && targetItem !== item) {
+                // Add a border to indicate drop position
+                const targetIdx = parseInt(targetItem.getAttribute('data-index'));
+                if (targetIdx > draggedItemIdx) {
+                    targetItem.classList.add('border-b-2', 'border-b-blue-500');
+                    targetItem.classList.remove('border-t-2', 'border-t-blue-500');
+                } else {
+                    targetItem.classList.add('border-t-2', 'border-t-blue-500');
+                    targetItem.classList.remove('border-b-2', 'border-b-blue-500');
+                }
+            }
+        });
+        
+        item.addEventListener('dragleave', (e) => {
+            const targetItem = e.target.closest('.draggable-accion');
+            if (targetItem) {
+                targetItem.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            }
+        });
+
+        item.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            const targetItem = e.target.closest('.draggable-accion');
+            if (targetItem) {
+                targetItem.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            }
+            
+            if (targetItem && draggedItemIdx !== null) {
+                const targetIdx = parseInt(targetItem.getAttribute('data-index'));
+                if (draggedItemIdx !== targetIdx) {
+                    const newList = [...partidoObj.configAcciones];
+                    const [draggedItem] = newList.splice(draggedItemIdx, 1);
+                    newList.splice(targetIdx, 0, draggedItem);
+                    
+                    partidoObj.configAcciones = newList;
+                    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                    renderListaConfigAcciones();
+                }
+            }
+        });
+
+        item.addEventListener('dragend', () => {
+            item.classList.remove('opacity-40', 'border-dashed', 'border-slate-400');
+            container.querySelectorAll('.draggable-accion').forEach(el => {
+                el.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            });
+            draggedItemIdx = null;
+        });
+    });
 
     container.querySelectorAll('.chk-active-accion').forEach(cb => {
         cb.addEventListener('change', async (e) => {
