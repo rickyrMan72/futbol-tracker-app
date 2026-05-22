@@ -3,6 +3,7 @@ import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { DEFAULT_ACCIONES } from './mod-directo.js';
+import { getGlobalAcciones } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
 const contenedor = document.getElementById('lista-partidos-container');
@@ -211,6 +212,7 @@ export function initPartidos() {
                     tiempoAcumulado: 0,
                     periodo: '1ª Parte'
                 };
+                data.configAcciones = getGlobalAcciones();
                 await addDoc(collection(db, 'partidos'), data); 
                 mostrarNotificacion("Partido guardado"); 
             }

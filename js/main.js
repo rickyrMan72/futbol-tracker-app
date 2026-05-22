@@ -7,6 +7,7 @@ import { initSesiones } from './mod-sesiones.js';
 import { initPartidos } from './mod-partidos.js';
 import { initDirecto } from './mod-directo.js';
 import { initPizarra } from './mod-pizarra.js';
+import { initConfiguracion } from './mod-configuracion.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Iniciar elementos visuales
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initPartidos();
         initDirecto();
         initPizarra();
+        initConfiguracion();
         
     }).catch((error) => {
         console.error("Error Firebase:", error);

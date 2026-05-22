@@ -353,7 +353,7 @@ export function initPizarra() {
 
     selector.addEventListener('change', async (e) => {
         if (Object.keys(jugadaPasos).length > 1) {
-            const conf = await confirmarAccion("Cambiar la formación borrará los pasos actuales. ¿Continuar?");
+            const conf = await confirmarAccion("Cambiar la formación borrará los pasos actuales. ¿Continuar?", "Continuar", "text-red-600");
             if (!conf) {
                 selector.value = currentFormacion;
                 return;
@@ -367,7 +367,7 @@ export function initPizarra() {
 
     btnReset.addEventListener('click', async () => {
         if (Object.keys(jugadaPasos).length > 1) {
-             const conf = await confirmarAccion("Esto reiniciará y borrará todo. ¿Continuar?");
+             const conf = await confirmarAccion("Esto reiniciará y borrará todo. ¿Continuar?", "Continuar", "text-red-600");
              if (!conf) return;
         }
         jugadaPasos = { 1: {} };
@@ -411,7 +411,7 @@ export function initPizarra() {
         if (isPlaying) return;
         const maxSteps = Math.max(...Object.keys(jugadaPasos).map(Number));
         if (currentStep === maxSteps && maxSteps > 1) {
-            if (await confirmarAccion(`¿Borrar paso ${currentStep}?`)) {
+            if (await confirmarAccion(`¿Borrar paso ${currentStep}?`, "Borrar", "text-red-600")) {
                 delete jugadaPasos[currentStep];
                 currentStep--;
                 applyStep(currentStep);

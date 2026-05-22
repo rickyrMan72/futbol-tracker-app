@@ -1,6 +1,7 @@
 import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc } from './firebase-config.js';
 import { mostrarNotificacion, confirmarAccion } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
+import { getGlobalAcciones } from './mod-configuracion.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { todosLosPartidos } from './mod-partidos.js';
 
@@ -37,7 +38,7 @@ export function getAccionesPartido() {
     if (partidoObj && partidoObj.configAcciones) {
         return partidoObj.configAcciones;
     }
-    return DEFAULT_ACCIONES;
+    return getGlobalAcciones();
 }
 
 export function initDirecto() {
@@ -60,7 +61,7 @@ export function initDirecto() {
 
     document.getElementById('btn-add-gol-rival')?.addEventListener('click', async () => {
         if (!partidoIdActivo) return;
-        if (await confirmarAccion("¿Añadir un gol al rival?")) {
+        if (await confirmarAccion("¿Añadir un gol al rival?", "Añadir", "text-blue-600")) {
             const msActuales = calcularMsActuales();
             await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
                 tipo: 'gol-rival',
@@ -76,6 +77,40 @@ export function initDirecto() {
         }
     });
 
+    document.getElementById('btn-add-tiro-rival')?.addEventListener('click', async () => {
+        if (!partidoIdActivo) return;
+        const msActuales = calcularMsActuales();
+        await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+            tipo: 'tiro-rival',
+            nombre: 'Tiro Rival',
+            icon: 'fa-bullseye',
+            color: 'text-amber-500',
+            tiempoAnotado: formatoCrono(msActuales),
+            minutoMs: msActuales,
+            periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
+            timestamp: Date.now()
+        });
+        mostrarNotificacion("Tiro en contra registrado");
+    });
+
+    document.getElementById('btn-add-roja-rival')?.addEventListener('click', async () => {
+        if (!partidoIdActivo) return;
+        if (await confirmarAccion("¿Añadir una tarjeta roja al rival?", "Añadir", "text-red-600")) {
+            const msActuales = calcularMsActuales();
+            await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+                tipo: 'roja-rival',
+                nombre: 'Roja Rival',
+                icon: 'fa-square',
+                color: 'text-red-500',
+                tiempoAnotado: formatoCrono(msActuales),
+                minutoMs: msActuales,
+                periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
+                timestamp: Date.now()
+            });
+            mostrarNotificacion("Tarjeta roja en contra registrada");
+        }
+    });
+
     // Timeline Fullscreen
     const btnTimelineExpand = document.getElementById('btn-timeline-expand');
     if (btnTimelineExpand) {
@@ -84,12 +119,12 @@ export function initDirecto() {
             const container = document.getElementById('directo-timeline-container');
             if (container.classList.contains('absolute')) {
                 container.classList.remove('absolute', 'inset-0', 'z-50', 'h-full');
-                container.classList.add('h-28', 'sm:h-36', 'hover:h-48', 'sm:hover:h-64');
+                container.classList.add('h-10', 'sm:h-12', 'hover:h-48', 'sm:hover:h-64');
                 btnTimelineExpand.innerHTML = '<i class="fa-solid fa-expand"></i>';
                 btnTimelineExpand.title = "Pantalla completa";
             } else {
                 container.classList.add('absolute', 'inset-0', 'z-50', 'h-full');
-                container.classList.remove('h-28', 'sm:h-36', 'hover:h-48', 'sm:hover:h-64');
+                container.classList.remove('h-10', 'sm:h-12', 'hover:h-48', 'sm:hover:h-64');
                 btnTimelineExpand.innerHTML = '<i class="fa-solid fa-compress"></i>';
                 btnTimelineExpand.title = "Minimizar";
             }
@@ -374,7 +409,7 @@ function clearSeleccionJugador() {
 function abrirModalConfigAcciones() {
     // Si no tiene config propia, la inicializamos con los defaults
     if (!partidoObj.configAcciones) {
-        partidoObj.configAcciones = JSON.parse(JSON.stringify(DEFAULT_ACCIONES));
+        partidoObj.configAcciones = getGlobalAcciones();
         // Save back to db so we have it
         updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: partidoObj.configAcciones });
     }

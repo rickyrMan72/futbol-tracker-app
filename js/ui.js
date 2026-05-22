@@ -55,7 +55,7 @@ export function initNavigation() {
     const navLinks = document.querySelectorAll('.nav-link');
     const views = document.querySelectorAll('.app-view');
     const headerTitle = document.getElementById('header-title');
-    const titulos = { 'view-dashboard': 'Panel de Control', 'view-plantilla': 'Plantilla', 'view-ejercicios': 'Ejercicios', 'view-sesiones': 'Sesiones', 'view-partidos': 'Partidos', 'view-pizarra': 'Pizarra' };
+    const titulos = { 'view-dashboard': 'Panel de Control', 'view-plantilla': 'Plantilla', 'view-ejercicios': 'Ejercicios', 'view-sesiones': 'Sesiones', 'view-partidos': 'Partidos', 'view-pizarra': 'Pizarra', 'view-configuracion': 'Configuración' };
 
     const btnMobileMenu = document.getElementById('btn-mobile-menu');
     const sidebar = document.getElementById('sidebar');

@@ -33,6 +33,11 @@
                 <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium">Pizarra</span></a></li>
             </ul>
         </nav>
+        <div class="mt-auto pb-4">
+            <ul class="space-y-1">
+                <li><a href="#" data-target="view-configuracion" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-gear w-6 text-center mr-2"></i><span class="font-medium">Configuración</span></a></li>
+            </ul>
+        </div>
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
@@ -147,7 +152,9 @@
                 <div class="flex justify-between items-center mb-2 shrink-0">
                     <button id="btn-back-partidos" class="text-slate-500 hover:text-slate-800 transition-colors"><i class="fa-solid fa-arrow-left mr-2"></i> Volver</button>
                     <h3 id="directo-titulo-partido" class="font-bold text-base sm:text-lg text-slate-800 truncate px-2">Cargando...</h3>
-                    <button id="btn-config-acciones" class="text-slate-500 hover:text-slate-800 transition-colors" title="Configurar Acciones"><i class="fa-solid fa-gear"></i></button>
+                    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <button id="btn-config-acciones" class="text-slate-500 hover:text-slate-800 transition-colors px-1" title="Configurar Acciones"><i class="fa-solid fa-gear text-lg"></i></button>
+                    </div>
                 </div>
 
                 <!-- TOP: Crono -->
@@ -157,8 +164,8 @@
                         <div class="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest font-semibold leading-none" id="directo-periodo">1ª Parte</div>
                     </div>
                     
-                    <div class="flex flex-col items-center justify-center relative group cursor-pointer" id="btn-add-gol-rival" title="Añadir Gol Rival (Click aquí)">
-                        <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">Marcador <i class="fa-solid fa-plus text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i></div>
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">Marcador</div>
                         <div class="flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-lg">
                             <span class="text-xl sm:text-2xl font-bold text-emerald-400" id="directo-marcador-mio">0</span>
                             <span class="text-slate-500">-</span>
@@ -198,9 +205,25 @@
                     </div>
                 </div>
 
+                <!-- BOTONES RIVAL -->
+                <div class="flex gap-2 sm:gap-3 shrink-0 mb-2 overflow-x-auto pb-1 hide-scrollbar">
+                    <button id="btn-add-gol-rival" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
+                        <i class="fa-solid fa-futbol text-sm"></i>
+                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Gol Rival</span>
+                    </button>
+                    <button id="btn-add-tiro-rival" class="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
+                        <i class="fa-solid fa-bullseye text-sm"></i>
+                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Tiro Fuera</span>
+                    </button>
+                    <button id="btn-add-roja-rival" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
+                        <i class="fa-solid fa-square text-sm"></i>
+                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Roja Rival</span>
+                    </button>
+                </div>
+
                 <!-- BOTTOM: Línea de tiempo / Efemérides -->
-                <div id="directo-timeline-container" class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-28 sm:h-36 relative z-10 transition-all group hover:h-48 sm:hover:h-64">
-                    <div class="bg-slate-50 border-b border-slate-200 px-4 py-1.5 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
+                <div id="directo-timeline-container" class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-10 sm:h-12 relative z-10 transition-all group hover:h-48 sm:hover:h-64 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 px-4 h-10 sm:h-12 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
                         <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
                         <div class="flex items-center gap-3">
                             <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
@@ -277,6 +300,29 @@
                 </div>
             </div>
 
+            <div id="view-configuracion" class="app-view hidden fade-in h-full overflow-y-auto">
+                <div class="px-6 py-8 sm:px-8 max-w-5xl mx-auto space-y-8 pb-16">
+                    <div>
+                        <h2 class="text-3xl font-black text-slate-800 tracking-tight">Configuración</h2>
+                        <p class="text-slate-500 mt-1">Ajustes globales de la aplicación</p>
+                    </div>
+
+                    <!-- User Login Settings -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-user-shield text-slate-400 mr-2"></i> Perfil de Usuario</h3>
+                        <p class="text-sm text-slate-500 mb-4">La integración con sistema de usuarios estará disponible en una actualización futura. Por ahora, todos los datos se almacenan en este dispositivo.</p>
+                        <button class="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg font-medium cursor-not-allowed" disabled>Iniciar Sesión (Próximamente)</button>
+                    </div>
+
+                    <!-- Matches Settings -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-trophy text-slate-400 mr-2"></i> Partidos</h3>
+                        <p class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los nuevos partidos que crees. Cada partido individual mantendrá su propia configuración que podrá ser modificada de forma independiente.</p>
+                        <button id="btn-config-global-acciones" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-lg font-medium transition-colors border border-emerald-200 flex items-center"><i class="fa-solid fa-bolt mr-2 w-5"></i> Configurar Acciones por Defecto</button>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -348,6 +394,78 @@
             </div>
             <div class="px-6 py-4 border-t flex justify-end">
                 <button id="btn-done-modal-acciones" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium">Hecho</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIG GLOBAL ACCIONES -->
+    <div id="modal-config-global-acciones" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in z-[60]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Configuración Global de Acciones</h3>
+                <button id="btn-close-modal-global-acciones" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los NUEVOS partidos.</div>
+                <div id="list-global-acciones-config" class="space-y-2 mb-4">
+                   <!-- acciones list renderizadas aqui -->
+                </div>
+                
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-sm mb-3" id="title-form-global-accion">Nueva Acción (Global)</h4>
+                    <input type="hidden" id="input-global-accion-id" value="">
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <input type="text" id="input-global-accion-nombre" placeholder="Nombre" class="px-3 py-2 border rounded-lg text-sm w-full">
+                        <select id="input-global-accion-icon" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="fa-bolt">Rayo (fa-bolt)</option>
+                            <option value="fa-futbol">Balón (fa-futbol)</option>
+                            <option value="fa-square">Tarjeta (fa-square)</option>
+                            <option value="fa-crown">Corona (fa-crown)</option>
+                            <option value="fa-handshake">Apretón de manos (fa-handshake)</option>
+                            <option value="fa-bullseye">Diana (fa-bullseye)</option>
+                            <option value="fa-xmark">Cruz (fa-xmark)</option>
+                            <option value="fa-magnet">Imán (fa-magnet)</option>
+                            <option value="fa-arrow-right-from-bracket">Salir (fa-arrow-right-from-bracket)</option>
+                            <option value="fa-hand">Mano (fa-hand)</option>
+                            <option value="fa-ban">Prohibido (fa-ban)</option>
+                            <option value="fa-flag">Bandera (fa-flag)</option>
+                            <option value="fa-triangle-exclamation">Alerta (fa-triangle-exclamation)</option>
+                            <option value="fa-arrows-rotate">Cambio (fa-arrows-rotate)</option>
+                            <option value="fa-truck-medical">Ambulancia (fa-truck-medical)</option>
+                            <option value="fa-check">Check (fa-check)</option>
+                            <option value="fa-star">Estrella (fa-star)</option>
+                            <option value="fa-shield-halved">Escudo (fa-shield-halved)</option>
+                            <option value="fa-stopwatch">Cronómetro (fa-stopwatch)</option>
+                            <option value="fa-shoe-prints">Pisadas (fa-shoe-prints)</option>
+                            <option value="fa-shirt">Camiseta (fa-shirt)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <select id="input-global-accion-color" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="text-slate-500" class="text-slate-500 font-bold">Gris</option>
+                            <option value="text-blue-500" class="text-blue-500 font-bold">Azul</option>
+                            <option value="text-emerald-500" class="text-emerald-500 font-bold">Verde</option>
+                            <option value="text-red-500" class="text-red-500 font-bold">Rojo</option>
+                            <option value="text-amber-500" class="text-amber-500 font-bold">Naranja</option>
+                            <option value="text-purple-500" class="text-purple-500 font-bold">Morado</option>
+                            <option value="text-pink-500" class="text-pink-500 font-bold">Rosa</option>
+                            <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
+                        </select>
+                        <input type="number" step="0.01" min="-5" max="5" id="input-global-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
+                    </div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <input type="checkbox" id="input-global-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
+                        <label for="input-global-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-global-accion" class="w-1/3 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 hidden">Cancelar</button>
+                        <button id="btn-save-global-accion" class="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">Añadir Acción Global</button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end">
+                <button id="btn-done-modal-global-acciones" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer">Hecho</button>
             </div>
         </div>
     </div>
