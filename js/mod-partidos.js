@@ -1,4 +1,4 @@
-import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
@@ -13,7 +13,9 @@ let mostrarHistoricos = false;
 let currentShareText = "";
 
 export function initPartidos() {
-    onSnapshot(collection(db, 'partidos'), (snapshot) => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'partidos'), where('ownerId', '==', auth.currentUser.uid));
+    onSnapshot(q, (snapshot) => {
         todosLosPartidos = [];
         snapshot.forEach((doc) => todosLosPartidos.push({ id: doc.id, ...doc.data() }));
         // Ordenar por fecha y hora (menor a mayor)
@@ -23,7 +25,7 @@ export function initPartidos() {
             return dateA - dateB;
         });
         renderizarPartidos();
-    });
+    }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     document.getElementById('btn-close-modal-estadisticas')?.addEventListener('click', () => {
         document.getElementById('modal-estadisticas').classList.add('hidden');
@@ -213,6 +215,8 @@ export function initPartidos() {
                     periodo: '1ª Parte'
                 };
                 data.configAcciones = getGlobalAcciones();
+                if (!auth.currentUser) throw new Error("No autenticado");
+                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'partidos'), data); 
                 mostrarNotificacion("Partido guardado"); 
             }
@@ -840,25 +844,47 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
     // Sort by date descending
     finalizados.sort((a,b) => new Date(`${b.fecha}T${b.hora}`) - new Date(`${a.fecha}T${a.hora}`));
     const ultimo = finalizados[0];
+    const partidosParaMedia = finalizados.slice(0, 20); // max 20 matches for average
     
     document.getElementById('dash-chart-title').innerText = `Último Partido: ${ultimo.esLocal === false ? ultimo.rival + ' - Mi Eq.' : 'Mi Eq. - ' + ultimo.rival}`;
     
     try {
-        const snap = await getDocs(collection(db, 'partidos', ultimo.id, 'efemerides'));
-        let configAcc = ultimo.configAcciones || DEFAULT_ACCIONES;
-        let distribucion = {};
+        let distribucionUltimo = {};
+        let distribucionTodos = {};
         
-        snap.forEach(d => {
-            const data = d.data();
-            const eTipo = data.tipo || data.accionId;
-            const accInfo = configAcc.find(a => a.id === eTipo);
-            const accNombre = data.nombre || (accInfo ? accInfo.nombre : eTipo);
-            if (accInfo || accNombre) {
-                distribucion[accNombre] = (distribucion[accNombre] || 0) + 1;
-            }
+        const efemPromises = partidosParaMedia.map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')));
+        const snaps = await Promise.all(efemPromises);
+        
+        snaps.forEach((snap, i) => {
+            const esUltimo = i === 0;
+            const partidoActual = partidosParaMedia[i];
+            const pConfigAcc = partidoActual.configAcciones || DEFAULT_ACCIONES; // Need DEFAULT_ACCIONES to be available, it is from config if imported, but we can fall back to [] if not
+            
+            snap.forEach(d => {
+                const data = d.data();
+                const eTipo = data.tipo || data.accionId;
+                const accInfo = pConfigAcc ? pConfigAcc.find(a => a.id === eTipo) : null;
+                const accNombre = data.nombre || (accInfo ? accInfo.nombre : eTipo);
+                
+                if (accInfo || accNombre) {
+                    if (esUltimo) {
+                        distribucionUltimo[accNombre] = (distribucionUltimo[accNombre] || 0) + 1;
+                    }
+                    distribucionTodos[accNombre] = (distribucionTodos[accNombre] || 0) + 1;
+                }
+            });
         });
         
-        if (Object.keys(distribucion).length > 0) {
+        const numPartidos = partidosParaMedia.length;
+        // Solo mostrar labels que estén en el último partido, o en la media si se desea.
+        // Mostrar todos los que tengan datos en el ultimo partido, para que el foco sea ese partido, plus maybe some common ones.
+        // Let's include everything that has > 0 in distributing Último, and the top from distribuionTodos
+        let allKeys = Array.from(new Set([...Object.keys(distribucionUltimo), ...Object.keys(distribucionTodos)]));
+        
+        // Filter out keys that have 0 in the last match and very few in average, to keep the chart readable
+        allKeys = allKeys.filter(k => (distribucionUltimo[k] || 0) > 0 || ((distribucionTodos[k] || 0) / numPartidos) >= 0.5);
+        
+        if (allKeys.length > 0) {
             card.classList.remove('hidden');
             
             const canvas = document.getElementById('rendimientoChart');
@@ -880,21 +906,42 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
                 window.dashChartInstance = new Chart(canvas, {
                     type: 'bar',
                     data: {
-                        labels: Object.keys(distribucion),
-                        datasets: [{
-                            label: 'Acciones',
-                            data: Object.values(distribucion),
-                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
-                            borderColor: 'rgb(5, 150, 105)',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }]
+                        labels: allKeys,
+                        datasets: [
+                            {
+                                label: 'Último partido',
+                                data: allKeys.map(k => distribucionUltimo[k] || 0),
+                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                                borderColor: 'rgb(5, 150, 105)',
+                                borderWidth: 1,
+                                borderRadius: 4,
+                                order: 2
+                            },
+                            {
+                                label: `Media (${numPartidos} part.)`,
+                                data: allKeys.map(k => Number(((distribucionTodos[k] || 0) / numPartidos).toFixed(1))),
+                                type: 'line',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderColor: 'rgb(59, 130, 246)',
+                                borderWidth: 2,
+                                pointBackgroundColor: 'rgb(59, 130, 246)',
+                                pointRadius: 4,
+                                borderDash: [5, 5],
+                                order: 1
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                        plugins: { 
+                            legend: { 
+                                display: true, 
+                                position: 'top',
+                                labels: { boxWidth: 12, font: { size: 11 } }
+                            } 
+                        },
+                        scales: { y: { beginAtZero: true } }
                     }
                 });
             }

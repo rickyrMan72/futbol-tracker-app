@@ -1,7 +1,7 @@
-import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, auth } from './firebase-config.js';
 import { mostrarNotificacion, confirmarAccion } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
-import { getGlobalAcciones } from './mod-configuracion.js';
+import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { todosLosPartidos } from './mod-partidos.js';
 
@@ -14,24 +14,131 @@ let cronoInterval = null;
 
 let jugadorSeleccionadoId = null;
 let accionCambioPendiente = null;
+let currentMatchTab = 'propias';
+let misModulosActivos = [];
+let rolesModalOpen = false;
+
+// Los modulos disponibles:
+const MODULOS_DISPONIBLES = ["Ataque", "Defensa", "Construcción", "Portería", "General"];
+
+function abrirModalRoles() {
+    rolesModalOpen = true;
+    document.getElementById('modal-roles-directo').classList.remove('hidden');
+    renderModalRoles();
+}
+
+function cerrarModalRoles() {
+    rolesModalOpen = false;
+    document.getElementById('modal-roles-directo').classList.add('hidden');
+}
+
+function renderModalRoles() {
+    if (!partidoObj) return;
+    const container = document.getElementById('lista-roles-modulos');
+    if (!container) return;
+
+    const rolesPista = partidoObj.rolesPista || {};
+    const uid = auth.currentUser ? auth.currentUser.uid : 'anon';
+    
+    // Auto-select modules the user already holds
+    MODULOS_DISPONIBLES.forEach(mod => {
+        if (rolesPista[mod] === uid && !misModulosActivos.includes(mod)) {
+            misModulosActivos.push(mod);
+        }
+    });
+
+    container.innerHTML = MODULOS_DISPONIBLES.map(mod => {
+        const ocupadoPorId = rolesPista[mod];
+        const estaOcupadoPorOtro = ocupadoPorId && ocupadoPorId !== uid;
+        // Solo deshabilitamos la seleccion si es un modulo normal ocupado por otro.
+        // Si es General, permitimos usarlo siempre? Bueno, si hay "General", quizas otro pueda ser General tambien...
+        // O lo dejamos igual.
+        const disabled = estaOcupadoPorOtro ? 'disabled' : '';
+        const isChecked = misModulosActivos.includes(mod) || (!estaOcupadoPorOtro && !ocupadoPorId && misModulosActivos.includes(mod)) ? 'checked' : '';
+        
+        let subtext = '';
+        if (estaOcupadoPorOtro) subtext = `<span class="text-xs text-rose-500 font-medium">Ocupado por otro usuario</span>`;
+        else if (rolesPista[mod] === uid) subtext = `<span class="text-xs text-emerald-500 font-medium">Reservado por ti</span>`;
+        else subtext = `<span class="text-xs text-slate-400">Libre</span>`;
+
+        const displayLabel = mod === 'General' ? 'General (Todas las acciones)' : mod;
+
+        return `
+            <label class="flex items-center gap-3 p-3 border rounded-lg bg-white shadow-sm cursor-pointer hover:bg-slate-50 transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}">
+                <input type="checkbox" class="chk-modulo w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500" value="${mod}" ${isChecked} ${disabled}>
+                <div class="flex flex-col">
+                    <span class="font-bold text-slate-700">${displayLabel}</span>
+                    ${subtext}
+                </div>
+            </label>
+        `;
+    }).join('');
+
+    container.querySelectorAll('.chk-modulo').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (e.target.checked) {
+                if (!misModulosActivos.includes(val)) misModulosActivos.push(val);
+            } else {
+                misModulosActivos = misModulosActivos.filter(m => m !== val);
+            }
+        });
+    });
+}
+
+async function guardarRolesSeleccionados() {
+    if (!partidoObj) return;
+    const uid = auth.currentUser ? auth.currentUser.uid : 'anon';
+    let newRoles = { ...(partidoObj.rolesPista || {}) };
+    
+    // Free modules that the user unchecked
+    MODULOS_DISPONIBLES.forEach(mod => {
+        if (newRoles[mod] === uid && !misModulosActivos.includes(mod)) {
+            newRoles[mod] = null; // Liberar
+        }
+    });
+
+    // Take modules that the user checked
+    misModulosActivos.forEach(mod => {
+        newRoles[mod] = uid; // Ocupar
+    });
+
+    try {
+        await updateDoc(doc(db, 'partidos', partidoIdActivo), { rolesPista: newRoles });
+        cerrarModalRoles();
+        renderAcciones(); // Re-render action buttons based on selected modules
+    } catch(err) {
+        mostrarNotificacion("Error al reservar módulos", true);
+        console.error(err);
+    }
+}
 
 export const DEFAULT_ACCIONES = [
-    { id: 'gol-pie', nombre: 'Gol con el pie', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
-    { id: 'gol-cabeza', nombre: 'Gol de cabeza', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
-    { id: 'gol-falta', nombre: 'Gol de falta', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3 },
-    { id: 'gol-olimpico', nombre: 'Gol Olímpico', icon: 'fa-crown', color: 'text-amber-500', isPositive: true, score: 3 },
-    { id: 'asistencia', nombre: 'Asistencia', icon: 'fa-handshake', color: 'text-blue-500', isPositive: true, score: 2 },
-    { id: 'tiro-puerta', nombre: 'Tiro a puerta', icon: 'fa-bullseye', color: 'text-emerald-400', score: 1 },
-    { id: 'tiro-fuera', nombre: 'Tiro fuera', icon: 'fa-xmark', color: 'text-slate-500', score: 0.5 },
-    { id: 'recuperacion', nombre: 'Recuperación', icon: 'fa-magnet', color: 'text-emerald-500', isPositive: true, score: 0.33 },
-    { id: 'perdida', nombre: 'Pérdida', icon: 'fa-arrow-right-from-bracket', color: 'text-rose-400', score: -0.5 },
-    { id: 'falta-cometida', nombre: 'Falta Cometida', icon: 'fa-gavel', color: 'text-amber-600', score: 0 },
-    { id: 'falta-recibida', nombre: 'Falta Recibida', icon: 'fa-user-nurse', color: 'text-blue-400', score: 0 },
-    { id: 'parada', nombre: 'Parada', icon: 'fa-hand', color: 'text-emerald-500', isPositive: true, score: 1 },
-    { id: 'amarilla', nombre: 'Tarjeta Amarilla', icon: 'fa-square', color: 'text-amber-500', isPositive: false, score: -1 },
-    { id: 'roja', nombre: 'Tarjeta Roja', icon: 'fa-square', color: 'text-red-500', isPositive: false, score: -3 },
-    { id: 'sustitucion', nombre: 'Sustituido', icon: 'fa-arrows-rotate', color: 'text-slate-500', isChange: true, score: 0 },
-    { id: 'sustitucion-lesion', nombre: 'Sustit. por Lesión', icon: 'fa-truck-medical', color: 'text-red-500', isChange: true, score: 0 }
+    { id: 'gol-pie', nombre: 'Gol con el pie', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3, modulo: 'Ataque' },
+    { id: 'gol-cabeza', nombre: 'Gol de cabeza', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3, modulo: 'Ataque' },
+    { id: 'gol-falta', nombre: 'Gol de falta', icon: 'fa-futbol', color: 'text-emerald-500', isPositive: true, score: 3, modulo: 'Ataque' },
+    { id: 'gol-olimpico', nombre: 'Gol Olímpico', icon: 'fa-crown', color: 'text-amber-500', isPositive: true, score: 3, modulo: 'Ataque' },
+    { id: 'asistencia', nombre: 'Asistencia', icon: 'fa-handshake', color: 'text-blue-500', isPositive: true, score: 2, modulo: 'Construcción' },
+    { id: 'tiro-puerta', nombre: 'Tiro a puerta', icon: 'fa-bullseye', color: 'text-emerald-400', score: 1, modulo: 'Ataque' },
+    { id: 'tiro-fuera', nombre: 'Tiro fuera', icon: 'fa-xmark', color: 'text-slate-500', score: 0.5, modulo: 'Ataque' },
+    { id: 'corner', nombre: 'Córner a favor', icon: 'fa-flag', color: 'text-blue-500', isPositive: true, score: 0.5, modulo: 'Ataque' },
+    { id: 'pase-correcto', nombre: 'Pase correcto', icon: 'fa-check', color: 'text-emerald-500', isPositive: true, score: 0.1, modulo: 'Construcción' },
+    { id: 'pase-fallado', nombre: 'Pase fallado', icon: 'fa-xmark', color: 'text-rose-400', isPositive: false, score: -0.1, modulo: 'Construcción' },
+    { id: 'recuperacion', nombre: 'Recuperación', icon: 'fa-magnet', color: 'text-emerald-500', isPositive: true, score: 0.33, modulo: 'Defensa' },
+    { id: 'perdida', nombre: 'Pérdida', icon: 'fa-arrow-right-from-bracket', color: 'text-rose-400', score: -0.5, modulo: 'Defensa' },
+    { id: 'falta-cometida', nombre: 'Falta Cometida', icon: 'fa-gavel', color: 'text-amber-600', score: 0, modulo: 'Defensa' },
+    { id: 'falta-recibida', nombre: 'Falta Recibida', icon: 'fa-user-nurse', color: 'text-blue-400', score: 0, modulo: 'Defensa' },
+    { id: 'parada', nombre: 'Parada', icon: 'fa-hand', color: 'text-emerald-500', isPositive: true, score: 1, modulo: 'Portería' },
+    { id: 'amarilla', nombre: 'Tarjeta Amarilla', icon: 'fa-square', color: 'text-amber-500', isPositive: false, score: -1, modulo: 'General' },
+    { id: 'roja', nombre: 'Tarjeta Roja', icon: 'fa-square', color: 'text-red-500', isPositive: false, score: -3, modulo: 'General' },
+    { id: 'sustitucion', nombre: 'Sustituido', icon: 'fa-arrows-rotate', color: 'text-slate-500', isChange: true, score: 0, modulo: 'General' },
+    { id: 'sustitucion-lesion', nombre: 'Sustit. por Lesión', icon: 'fa-truck-medical', color: 'text-red-500', isChange: true, score: 0, modulo: 'General' }
+];
+
+export const DEFAULT_ACCIONES_RIVAL = [
+    { id: 'gol-rival', nombre: 'Gol Rival', icon: 'fa-futbol', color: 'text-slate-500', modulo: 'Defensa' },
+    { id: 'tiro-rival', nombre: 'Tiro Rival', icon: 'fa-xmark', color: 'text-slate-500', modulo: 'Defensa' },
+    { id: 'roja-rival', nombre: 'Roja Rival', icon: 'fa-square', color: 'text-red-500', modulo: 'General' }
 ];
 
 export function getAccionesPartido() {
@@ -39,6 +146,13 @@ export function getAccionesPartido() {
         return partidoObj.configAcciones;
     }
     return getGlobalAcciones();
+}
+
+export function getAccionesRivalPartido() {
+    if (partidoObj && partidoObj.configAccionesRival) {
+        return partidoObj.configAccionesRival;
+    }
+    return getGlobalAccionesRival();
 }
 
 export function initDirecto() {
@@ -54,62 +168,56 @@ export function initDirecto() {
     document.getElementById('btn-save-accion').addEventListener('click', guardarNuevaAccion);
     document.getElementById('btn-cancel-accion').addEventListener('click', resetFormAccion);
 
+    document.getElementById('tab-match-propias')?.addEventListener('click', () => {
+        currentMatchTab = 'propias';
+        actualizarTabsMatch();
+        resetFormAccion();
+        renderListaConfigAcciones();
+    });
+
+    document.getElementById('tab-match-rival')?.addEventListener('click', () => {
+        currentMatchTab = 'rival';
+        actualizarTabsMatch();
+        resetFormAccion();
+        renderListaConfigAcciones();
+    });
+
     // Controles de cronómetro
     document.getElementById('btn-crono-start').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-pause').addEventListener('click', toggleCrono);
     document.getElementById('btn-crono-next').addEventListener('click', avanzarPeriodo);
 
-    document.getElementById('btn-add-gol-rival')?.addEventListener('click', async () => {
-        if (!partidoIdActivo) return;
-        if (await confirmarAccion("¿Añadir un gol al rival?", "Añadir", "text-blue-600")) {
-            const msActuales = calcularMsActuales();
-            await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
-                tipo: 'gol-rival',
-                nombre: 'Gol Rival',
-                icon: 'fa-futbol',
-                color: 'text-rose-400',
-                tiempoAnotado: formatoCrono(msActuales),
-                minutoMs: msActuales,
-                periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
-                timestamp: Date.now()
-            });
-            mostrarNotificacion("Gol en contra registrado");
-        }
-    });
+    const rivalList = document.getElementById('directo-acciones-rival-list');
+    if (rivalList) {
+        rivalList.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.btn-add-accion-rival');
+            if (!btn) return;
+            const accionId = btn.getAttribute('data-id');
+            const accionObj = getAccionesRivalPartido().find(a => a.id === accionId);
+            if (!accionObj || !partidoIdActivo) return;
 
-    document.getElementById('btn-add-tiro-rival')?.addEventListener('click', async () => {
-        if (!partidoIdActivo) return;
-        const msActuales = calcularMsActuales();
-        await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
-            tipo: 'tiro-rival',
-            nombre: 'Tiro Rival',
-            icon: 'fa-bullseye',
-            color: 'text-amber-500',
-            tiempoAnotado: formatoCrono(msActuales),
-            minutoMs: msActuales,
-            periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
-            timestamp: Date.now()
+            let shouldAdd = true;
+            if (accionObj.id.includes('gol') || accionObj.id.includes('roja')) {
+                shouldAdd = await confirmarAccion(`¿Añadir "${accionObj.nombre}" al rival?`, "Añadir", accionObj.color.replace('text-', 'text-') || "text-rose-600");
+            }
+
+            if (shouldAdd) {
+                const msActuales = calcularMsActuales();
+                await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+                    tipo: accionObj.id,
+                    nombre: accionObj.nombre,
+                    icon: accionObj.icon,
+                    color: accionObj.color,
+                    tiempoAnotado: formatoCrono(msActuales),
+                    minutoMs: msActuales,
+                    periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
+                    timestamp: Date.now(),
+                    creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon'
+                });
+                mostrarNotificacion(`${accionObj.nombre} registrado`);
+            }
         });
-        mostrarNotificacion("Tiro en contra registrado");
-    });
-
-    document.getElementById('btn-add-roja-rival')?.addEventListener('click', async () => {
-        if (!partidoIdActivo) return;
-        if (await confirmarAccion("¿Añadir una tarjeta roja al rival?", "Añadir", "text-red-600")) {
-            const msActuales = calcularMsActuales();
-            await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
-                tipo: 'roja-rival',
-                nombre: 'Roja Rival',
-                icon: 'fa-square',
-                color: 'text-red-500',
-                tiempoAnotado: formatoCrono(msActuales),
-                minutoMs: msActuales,
-                periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
-                timestamp: Date.now()
-            });
-            mostrarNotificacion("Tarjeta roja en contra registrada");
-        }
-    });
+    }
 
     // Timeline Fullscreen
     const btnTimelineExpand = document.getElementById('btn-timeline-expand');
@@ -133,6 +241,9 @@ export function initDirecto() {
 
     // Deseleccionar
     document.getElementById('btn-unselect-jugador').addEventListener('click', clearSeleccionJugador);
+
+    document.getElementById('btn-close-modal-roles').addEventListener('click', cerrarModalRoles);
+    document.getElementById('btn-save-roles').addEventListener('click', guardarRolesSeleccionados);
 
     // Modal Sustitución
     document.getElementById('btn-close-modal-sustitucion').addEventListener('click', cerrarModalCambio);
@@ -175,10 +286,16 @@ function abrirDirecto(id) {
             partidoObj.enCampo = partidoObj.titulares || [];
         }
 
+        if (rolesModalOpen) {
+            renderModalRoles();
+        }
+
         renderJugadoresEnCampo();
         updateCronoUI();
         manejarIntervaloCrono();
-    });
+        renderAccionesRival();
+        renderAcciones(); // update buttons just in case
+    }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     // Subscribe to efemerides
     if (unsubEfemerides) unsubEfemerides();
@@ -187,9 +304,12 @@ function abrirDirecto(id) {
         snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
         efemeridesList.sort((a,b) => b.timestamp - a.timestamp); // Mas recientes primero
         renderEfemerides();
-    });
+    }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     clearSeleccionJugador();
+    
+    // Abrir roles
+    abrirModalRoles();
 }
 
 function cerrarDirecto() {
@@ -406,13 +526,42 @@ function clearSeleccionJugador() {
 
 
 // --------------------------------- CONFIG ACCIONES ---------------------------------
+function actualizarTabsMatch() {
+    const tabPropias = document.getElementById('tab-match-propias');
+    const tabRival = document.getElementById('tab-match-rival');
+    if (!tabPropias || !tabRival) return;
+
+    if (currentMatchTab === 'propias') {
+        tabPropias.className = "px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800";
+        tabRival.className = "px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700";
+    } else {
+        tabRival.className = "px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800";
+        tabPropias.className = "px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700";
+    }
+}
+
 function abrirModalConfigAcciones() {
+    let needsUpdate = false;
     // Si no tiene config propia, la inicializamos con los defaults
     if (!partidoObj.configAcciones) {
         partidoObj.configAcciones = getGlobalAcciones();
-        // Save back to db so we have it
-        updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: partidoObj.configAcciones });
+        needsUpdate = true;
     }
+    if (!partidoObj.configAccionesRival) {
+        partidoObj.configAccionesRival = getGlobalAccionesRival();
+        needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+        // Save back to db so we have it
+        updateDoc(doc(db, 'partidos', partidoIdActivo), { 
+            configAcciones: partidoObj.configAcciones,
+            configAccionesRival: partidoObj.configAccionesRival
+        });
+    }
+
+    currentMatchTab = 'propias';
+    actualizarTabsMatch();
     resetFormAccion();
     renderListaConfigAcciones();
     document.getElementById('modal-config-acciones').classList.remove('hidden');
@@ -421,21 +570,29 @@ function abrirModalConfigAcciones() {
 function cerrarModalConfigAcciones() {
     document.getElementById('modal-config-acciones').classList.add('hidden');
     renderAcciones(); // Re-render main actions
+    renderAccionesRival();
 }
 
 function renderListaConfigAcciones() {
     const container = document.getElementById('list-acciones-config');
-    const list = getAccionesPartido();
+    const list = currentMatchTab === 'propias' ? getAccionesPartido() : getAccionesRivalPartido();
     
+    const defaultModuloMap = [...DEFAULT_ACCIONES, ...DEFAULT_ACCIONES_RIVAL].reduce((map, defAcc) => {
+        map[defAcc.id] = defAcc.modulo;
+        return map;
+    }, {});
+
     container.innerHTML = list.map((acc, index) => {
         const isActive = acc.isActive !== false; // true by default
+        const mod = acc.modulo || defaultModuloMap[acc.id] || 'General';
+
         return `
-            <div class="draggable-accion flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 opacity-${isActive ? '100' : '50'}" draggable="true" data-id="${acc.id}" data-index="${index}">
+            <div class="draggable-accion flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 ${isActive ? 'opacity-100' : 'opacity-50'}" draggable="true" data-id="${acc.id}" data-index="${index}">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
                     <i class="fa-solid fa-grip-vertical text-slate-300 hover:text-slate-500 cursor-grab px-1" title="Arrastrar para reordenar"></i>
                     <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
                     <i class="fa-solid ${acc.icon} ${acc.color} w-6 text-center text-lg shrink-0"></i>
-                    <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''}</span>
+                    <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''} ${mod !== 'General' ? `<span class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded ml-1 border border-blue-100">${mod}</span>` : ''}</span>
                 </div>
                 <div class="flex gap-1 shrink-0">
                     <button class="btn-edit-accion w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
@@ -490,12 +647,17 @@ function renderListaConfigAcciones() {
             if (targetItem && draggedItemIdx !== null) {
                 const targetIdx = parseInt(targetItem.getAttribute('data-index'));
                 if (draggedItemIdx !== targetIdx) {
-                    const newList = [...partidoObj.configAcciones];
+                    const newList = currentMatchTab === 'propias' ? [...partidoObj.configAcciones] : [...partidoObj.configAccionesRival];
                     const [draggedItem] = newList.splice(draggedItemIdx, 1);
                     newList.splice(targetIdx, 0, draggedItem);
                     
-                    partidoObj.configAcciones = newList;
-                    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                    if (currentMatchTab === 'propias') {
+                        partidoObj.configAcciones = newList;
+                        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                    } else {
+                        partidoObj.configAccionesRival = newList;
+                        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAccionesRival: newList });
+                    }
                     renderListaConfigAcciones();
                 }
             }
@@ -514,10 +676,12 @@ function renderListaConfigAcciones() {
         cb.addEventListener('change', async (e) => {
             const id = e.currentTarget.getAttribute('data-id');
             const isActive = e.currentTarget.checked;
-            const idx = partidoObj.configAcciones.findIndex(a => a.id === id);
+            const refList = currentMatchTab === 'propias' ? partidoObj.configAcciones : partidoObj.configAccionesRival;
+            const idx = refList.findIndex(a => a.id === id);
             if (idx !== -1) {
-                partidoObj.configAcciones[idx].isActive = isActive;
-                await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: partidoObj.configAcciones });
+                refList[idx].isActive = isActive;
+                const updateObj = currentMatchTab === 'propias' ? { configAcciones: refList } : { configAccionesRival: refList };
+                await updateDoc(doc(db, 'partidos', partidoIdActivo), updateObj);
                 renderListaConfigAcciones();
             }
         });
@@ -526,7 +690,8 @@ function renderListaConfigAcciones() {
     container.querySelectorAll('.btn-edit-accion').forEach(btn => {
         btn.addEventListener('click', (e) => {
             const id = e.currentTarget.getAttribute('data-id');
-            const acc = getAccionesPartido().find(a => a.id === id);
+            const list = currentMatchTab === 'propias' ? getAccionesPartido() : getAccionesRivalPartido();
+            const acc = list.find(a => a.id === id);
             if (acc) {
                 document.getElementById('input-accion-id').value = acc.id;
                 document.getElementById('input-accion-nombre').value = acc.nombre;
@@ -534,7 +699,8 @@ function renderListaConfigAcciones() {
                 document.getElementById('input-accion-color').value = acc.color;
                 document.getElementById('input-accion-isChange').checked = !!acc.isChange;
                 document.getElementById('input-accion-score').value = acc.score !== undefined ? acc.score : '';
-                document.getElementById('title-form-accion').innerText = 'Editar Acción';
+                document.getElementById('input-accion-modulo').value = acc.modulo || 'General';
+                document.getElementById('title-form-accion').innerText = currentMatchTab === 'propias' ? 'Editar Acción' : 'Editar Acción Rival';
                 document.getElementById('btn-save-accion').innerText = 'Guardar Cambios';
                 document.getElementById('btn-cancel-accion').classList.remove('hidden');
                 document.getElementById('btn-save-accion').classList.remove('w-full');
@@ -546,9 +712,15 @@ function renderListaConfigAcciones() {
         btn.addEventListener('click', async (e) => {
             const id = e.currentTarget.getAttribute('data-id');
             if (await confirmarAccion('¿Seguro que quieres eliminar esta acción?')) {
-                const newList = getAccionesPartido().filter(a => a.id !== id);
-                partidoObj.configAcciones = newList;
-                await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                const list = currentMatchTab === 'propias' ? getAccionesPartido() : getAccionesRivalPartido();
+                const newList = list.filter(a => a.id !== id);
+                if (currentMatchTab === 'propias') {
+                    partidoObj.configAcciones = newList;
+                    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+                } else {
+                    partidoObj.configAccionesRival = newList;
+                    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAccionesRival: newList });
+                }
                 renderListaConfigAcciones();
             }
         });
@@ -562,7 +734,8 @@ function resetFormAccion() {
     document.getElementById('input-accion-color').value = 'text-slate-500';
     document.getElementById('input-accion-isChange').checked = false;
     document.getElementById('input-accion-score').value = '';
-    document.getElementById('title-form-accion').innerText = 'Nueva Acción';
+    document.getElementById('input-accion-modulo').value = 'General';
+    document.getElementById('title-form-accion').innerText = currentMatchTab === 'propias' ? 'Nueva Acción' : 'Nueva Acción Rival';
     document.getElementById('btn-save-accion').innerText = 'Añadir Acción';
     document.getElementById('btn-cancel-accion').classList.add('hidden');
     document.getElementById('btn-save-accion').classList.add('w-full');
@@ -576,6 +749,7 @@ async function guardarNuevaAccion() {
     const isChange = document.getElementById('input-accion-isChange').checked;
     const scoreVal = document.getElementById('input-accion-score').value.trim();
     const score = scoreVal !== '' ? parseFloat(scoreVal) : undefined;
+    const modulo = document.getElementById('input-accion-modulo').value;
 
     if (!nombre) {
         mostrarNotificacion('El nombre es obligatorio', true);
@@ -589,26 +763,32 @@ async function guardarNuevaAccion() {
     icon = icon.replace('fa-solid ', '').trim();
     if (!icon.startsWith('fa-')) icon = 'fa-' + icon;
 
-    let newList = [...getAccionesPartido()];
+    let newList = currentMatchTab === 'propias' ? [...getAccionesPartido()] : [...getAccionesRivalPartido()];
 
     if (idField) {
         // Edit
         const idx = newList.findIndex(a => a.id === idField);
         if (idx !== -1) {
-            newList[idx] = { ...newList[idx], nombre, icon, color, isChange };
+            newList[idx] = { ...newList[idx], nombre, icon, color, isChange, modulo };
             if (score !== undefined) newList[idx].score = score;
             else delete newList[idx].score;
         }
     } else {
         // Add
         const newId = 'acc_' + Date.now().toString(36);
-        const newAcc = { id: newId, nombre, icon, color, isChange, isActive: true };
+        const newAcc = { id: newId, nombre, icon, color, isChange, isActive: true, modulo };
         if (score !== undefined) newAcc.score = score;
         newList.push(newAcc);
     }
 
-    partidoObj.configAcciones = newList;
-    await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+    if (currentMatchTab === 'propias') {
+        partidoObj.configAcciones = newList;
+        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
+    } else {
+        partidoObj.configAccionesRival = newList;
+        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAccionesRival: newList });
+    }
+    
     resetFormAccion();
     renderListaConfigAcciones();
 }
@@ -616,7 +796,28 @@ async function guardarNuevaAccion() {
 // --------------------------------- ACCIONES ---------------------------------
 function renderAcciones() {
     const container = document.getElementById('directo-acciones-list');
-    const list = getAccionesPartido().filter(acc => acc.isActive !== false);
+    
+    // Si no hemos escogido modulos y el modal no está abierto, no renderizar botones
+    if (misModulosActivos.length === 0 && !rolesModalOpen) {
+        container.innerHTML = `<div class="col-span-full p-4 text-center text-slate-500 text-sm">No has seleccionado ningún módulo de rastreo. <button class="btn-abrir-roles text-blue-500 underline ml-1">Seleccionar</button></div>`;
+        container.querySelector('.btn-abrir-roles')?.addEventListener('click', abrirModalRoles);
+        return;
+    }
+
+    const defaultModuloMap = [...DEFAULT_ACCIONES, ...DEFAULT_ACCIONES_RIVAL].reduce((map, defAcc) => {
+        map[defAcc.id] = defAcc.modulo;
+        return map;
+    }, {});
+
+    const list = getAccionesPartido().filter(acc => {
+        if (acc.isActive === false) return false;
+        
+        const mod = acc.modulo || defaultModuloMap[acc.id] || 'General'; 
+
+        // Muestra si la accion está asignada al modulo que tiene el usuario
+        return misModulosActivos.includes(mod);
+    });
+
     container.innerHTML = list.map(acc => {
         let btnCls = 'bg-white border hover:bg-slate-50';
         if (acc.isChange) btnCls = 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-700';
@@ -635,6 +836,23 @@ function renderAcciones() {
             manejarClickAccion(id);
         });
     });
+}
+
+function renderAccionesRival() {
+    const container = document.getElementById('directo-acciones-rival-list');
+    if (!container) return;
+    const list = getAccionesRivalPartido().filter(acc => acc.isActive !== false);
+    container.innerHTML = list.map(acc => {
+        let btnCls = 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700';
+        if (acc.color && acc.color.includes('red')) btnCls = 'bg-red-50 border-red-200 hover:bg-red-100 text-red-600';
+
+        return `
+            <button class="btn-add-accion-rival flex-1 min-w-[100px] border rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2 ${btnCls}" data-id="${acc.id}">
+                <i class="fa-solid ${acc.icon} ${acc.color} text-sm"></i>
+                <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">${acc.nombre}</span>
+            </button>
+        `;
+    }).join('');
 }
 
 function manejarClickAccion(accionId) {
@@ -671,6 +889,7 @@ async function registrarEfemeride(accDef, extraData = {}) {
         timestamp: Date.now(),
         icon: accDef.icon,
         color: accDef.color,
+        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
         ...extraData
     };
 

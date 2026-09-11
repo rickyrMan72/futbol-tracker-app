@@ -1,0 +1,323 @@
+{
+  "entities": {
+    "Equipo": {
+      "title": "Equipo",
+      "description": "Un equipo gestionado por un usuario",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "ID del usuario propietario (Firebase Auth UID)"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "escudo": {
+          "type": "string",
+          "description": "Base64 de la imagen del escudo o URL"
+        },
+        "modalidad": {
+          "type": "string"
+        },
+        "temporada": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp de creación"
+        },
+        "configAcciones": {
+          "type": "array",
+          "description": "Configuración de acciones del equipo"
+        },
+        "configAccionesRival": {
+          "type": "array",
+          "description": "Configuración de acciones rivales"
+        }
+      },
+      "required": ["ownerId", "nombre"]
+    },
+    "Jugador": {
+      "title": "Jugador",
+      "description": "Un jugador asociado a un equipo",
+      "type": "object",
+      "properties": {
+        "equipoId": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "dorsal": {
+          "type": "number"
+        },
+        "posicion": {
+          "type": "string"
+        },
+        "estado": {
+          "type": "string"
+        },
+        "foto": {
+          "type": "string",
+          "description": "Base64 string de la foto"
+        },
+        "stats": {
+          "type": "object"
+        }
+      },
+      "required": ["equipoId", "ownerId", "nombre"]
+    },
+    "Ejercicio": {
+      "title": "Ejercicio",
+      "description": "Un ejercicio creado por el usuario en la biblioteca general",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "categoria": {
+          "type": "string"
+        },
+        "modalidad": {
+          "type": "string"
+        },
+        "tiempoRep": {
+          "type": "number"
+        },
+        "repeticiones": {
+          "type": "number"
+        },
+        "descanso": {
+          "type": "number"
+        },
+        "duracion": {
+          "type": "number"
+        },
+        "intensidad": {
+          "type": "string"
+        },
+        "jugadores": {
+          "type": "string"
+        },
+        "material": {
+          "type": "string"
+        },
+        "descripcion": {
+          "type": "string"
+        },
+        "pizarraState": {
+          "type": "string",
+          "description": "String JSON canvas de pizarra"
+        },
+        "pizarraImage": {
+          "type": "string",
+          "description": "DataURL base64 de la imagen"
+        },
+        "pizarraFondo": {
+          "type": "string"
+        }
+      },
+      "required": ["ownerId", "nombre"]
+    },
+    "Sesion": {
+      "title": "Sesion",
+      "description": "Una sesión de entrenamiento asociada a un equipo",
+      "type": "object",
+      "properties": {
+        "equipoId": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "fecha": {
+          "type": "string"
+        },
+        "hora": {
+          "type": "string"
+        },
+        "objetivo": {
+          "type": "string"
+        },
+        "comentarios": {
+          "type": "string"
+        },
+        "ejerciciosIds": {
+          "type": "array"
+        },
+        "asistencia": {
+          "type": "object",
+          "description": "Mapa de jugadorId a estado (true, false, null)"
+        }
+      },
+      "required": ["equipoId", "ownerId", "fecha"]
+    },
+    "Partido": {
+      "title": "Partido",
+      "description": "Un partido de un equipo",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string"
+        },
+        "equipoId": {
+          "type": "string"
+        },
+        "rival": {
+          "type": "string"
+        },
+        "esLocal": {
+          "type": "boolean"
+        },
+        "fecha": {
+          "type": "string"
+        },
+        "hora": {
+          "type": "string"
+        },
+        "lugar": {
+          "type": "string"
+        },
+        "escudoRival": {
+          "type": "string"
+        },
+        "comentarios": {
+          "type": "string"
+        },
+        "alineacion": {
+          "type": "object",
+          "description": "IDs de jugadores titulares"
+        },
+        "marcador": {
+          "type": "object",
+          "description": "{mio: number, rival: number}"
+        },
+        "cronoActivo": {
+          "type": "boolean"
+        },
+        "timestampInicioCrono": {
+          "type": "number"
+        },
+        "ultimoInicioTimer": {
+          "type": "number"
+        },
+        "tiempoAcumulado": {
+          "type": "number"
+        },
+        "periodo": {
+          "type": "string"
+        },
+        "configAcciones": {
+          "type": "array"
+        }
+      },
+      "required": ["ownerId", "equipoId", "rival", "fecha"]
+    },
+    "Efemeride": {
+      "title": "Efemeride",
+      "description": "Un evento o acción ocurrida durante un partido",
+      "type": "object",
+      "properties": {
+        "tipo": {
+          "type": "string"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "tiempoAnotado": {
+          "type": "string"
+        },
+        "periodoAnotado": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "number"
+        },
+        "jugadorId": {
+          "type": "string"
+        },
+        "entraId": {
+          "type": "string"
+        },
+        "isChange": {
+          "type": "boolean"
+        },
+        "rivalValue": {
+          "type": "number"
+        }
+      },
+      "required": ["tipo", "nombre"]
+    },
+    "Jugada": {
+      "title": "Jugada",
+      "description": "Una jugada de la pizarra asociada a un equipo",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string"
+        },
+        "nombre": {
+          "type": "string"
+        },
+        "equipoId": {
+          "type": "string"
+        },
+        "tacticaId": {
+          "type": "string"
+        },
+        "pasos": {
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "object"
+        }
+      },
+      "required": ["ownerId", "equipoId", "nombre"]
+    }
+  },
+  "firestore": {
+    "/equipos/{equipoId}": {
+      "schema": "Equipo",
+      "description": "Colección de equipos de los usuarios"
+    },
+    "/jugadores/{jugadorId}": {
+      "schema": "Jugador",
+      "description": "Colección de jugadores asociados a equipos"
+    },
+    "/ejercicios/{ejercicioId}": {
+      "schema": "Ejercicio",
+      "description": "Colección de ejercicios de cada usuario"
+    },
+    "/sesiones/{sesionId}": {
+      "schema": "Sesion",
+      "description": "Colección de sesiones de entrenamiento agrupadas por equipo/user"
+    },
+    "/partidos/{partidoId}": {
+      "schema": "Partido",
+      "description": "Colección de partidos"
+    },
+    "/partidos/{partidoId}/efemerides/{efemerideId}": {
+      "schema": "Efemeride",
+      "description": "Subcolección de eventos de un partido"
+    },
+    "/jugadas/{jugadaId}": {
+      "schema": "Jugada",
+      "description": "Colección de jugadas de pizarra por equipo"
+    }
+  }
+}

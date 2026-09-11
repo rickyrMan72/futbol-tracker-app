@@ -1,4 +1,4 @@
-import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { todosLosEjercicios } from './mod-ejercicios.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
@@ -7,12 +7,14 @@ let todasLasSesiones = [];
 const contenedor = document.getElementById('lista-sesiones-container');
 
 export function initSesiones() {
-    onSnapshot(collection(db, 'sesiones'), (snapshot) => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'sesiones'), where('ownerId', '==', auth.currentUser.uid));
+    onSnapshot(q, (snapshot) => {
         todasLasSesiones = [];
         snapshot.forEach((doc) => todasLasSesiones.push({ id: doc.id, ...doc.data() }));
         todasLasSesiones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         renderizarSesiones();
-    });
+    }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     const prepSesion = () => {
         if (!document.getElementById('form-sesion').dataset.editId) {
@@ -56,6 +58,8 @@ export function initSesiones() {
                 await updateDoc(doc(db, 'sesiones', editId), data);
                 mostrarNotificacion("Sesión actualizada"); 
             } else {
+                if (!auth.currentUser) throw new Error("No autenticado");
+                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'sesiones'), data); 
                 mostrarNotificacion("Sesión guardada"); 
             }

@@ -206,19 +206,8 @@
                 </div>
 
                 <!-- BOTONES RIVAL -->
-                <div class="flex gap-2 sm:gap-3 shrink-0 mb-2 overflow-x-auto pb-1 hide-scrollbar">
-                    <button id="btn-add-gol-rival" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
-                        <i class="fa-solid fa-futbol text-sm"></i>
-                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Gol Rival</span>
-                    </button>
-                    <button id="btn-add-tiro-rival" class="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-600 border border-amber-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
-                        <i class="fa-solid fa-bullseye text-sm"></i>
-                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Tiro Fuera</span>
-                    </button>
-                    <button id="btn-add-roja-rival" class="flex-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2">
-                        <i class="fa-solid fa-square text-sm"></i>
-                        <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">Roja Rival</span>
-                    </button>
+                <div id="directo-acciones-rival-list" class="flex gap-2 sm:gap-3 shrink-0 mb-2 overflow-x-auto pb-1 hide-scrollbar">
+                    <!-- Botones rivales dinámicos -->
                 </div>
 
                 <!-- BOTTOM: Línea de tiempo / Efemérides -->
@@ -235,6 +224,27 @@
                     </div>
                 </div>
             </div>
+
+            <!-- MODAL ROLES DIRECTO -->
+            <div id="modal-roles-directo" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-[100] flex items-center justify-center p-4 fade-in">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
+                    <div class="flex justify-between items-center bg-slate-50 border-b border-slate-100 px-4 py-3 shrink-0">
+                        <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users pr-2 mt-1"></i> Selección de Módulos</h3>
+                        <button id="btn-close-modal-roles" class="text-slate-400 hover:text-slate-600 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-4 sm:p-6 overflow-y-auto max-h-[80vh]">
+                        <p class="text-sm text-slate-600 mb-4">Selecciona los módulos de eventos que vas a registrar. Los módulos bloqueados están siendo utilizados por otros usuarios en directo.</p>
+                        
+                        <div id="lista-roles-modulos" class="space-y-3">
+                            <!-- checkboxes dynamically rendered here -->
+                        </div>
+                    </div>
+                    <div class="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                        <button id="btn-save-roles" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors">Entrar al Partido</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- VISTA 7: PIZARRA -->
             <div id="view-pizarra" class="app-view hidden fade-in h-full flex flex-col w-full overflow-y-auto overflow-x-hidden pb-4">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 shrink-0 gap-3 w-full">
@@ -308,10 +318,51 @@
                     </div>
 
                     <!-- User Login Settings -->
-                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-user-shield text-slate-400 mr-2"></i> Perfil de Usuario</h3>
-                        <p class="text-sm text-slate-500 mb-4">La integración con sistema de usuarios estará disponible en una actualización futura. Por ahora, todos los datos se almacenan en este dispositivo.</p>
-                        <button class="bg-slate-100 text-slate-400 px-4 py-2 rounded-lg font-medium cursor-not-allowed" disabled>Iniciar Sesión (Próximamente)</button>
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm transition-all relative overflow-hidden">
+                        <div id="user-profile-container">
+                            <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-user-shield text-emerald-500 mr-2"></i> Perfil de Usuario</h3>
+                            
+                            <!-- Not logged in state -->
+                            <div id="auth-logged-out" class="space-y-4 pt-1">
+                                <p class="text-sm text-slate-500">Inicia sesión con Google para sincronizar tus datos y mantenerlos seguros en la nube. Sin iniciar sesión, usarás una cuenta anónima temporal si está permitida.</p>
+                                <button id="btn-login-google" class="bg-white text-slate-700 px-4 py-2 border border-slate-300 rounded-lg shadow-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" alt="Google">
+                                    Continuar con Google
+                                </button>
+                            </div>
+
+                            <!-- Logged in state -->
+                            <div id="auth-logged-in" class="space-y-4 hidden flex flex-col sm:flex-row sm:items-center sm:justify-between py-2">
+                                <div class="flex items-center gap-4">
+                                    <img id="auth-user-photo" src="" class="w-12 h-12 rounded-full border border-slate-200 hidden" alt="Foto">
+                                    <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center border border-emerald-200 text-xl font-bold hidden" id="auth-user-avatar">?</div>
+                                    <div>
+                                        <p class="font-bold text-slate-800" id="auth-user-name">Usuario Conectado</p>
+                                        <p class="text-xs text-slate-500" id="auth-user-email">email@ejemplo.com</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="btn-logout" class="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition-colors border border-red-200 text-sm">Cerrar Sesión</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Mi data migration container -->
+                            <div id="migration-container" class="mt-4 pt-4 border-t border-slate-100 hidden">
+                                <h4 class="text-sm font-bold text-slate-700 mb-2">Migración de Datos Anteriores</h4>
+                                <p class="text-xs text-slate-500 mb-3 block">Haz clic aquí para recuperar los datos y equipos que creaste antes de activar tu cuenta. Se asignarán a tu usuario actual.</p>
+                                <button id="btn-migrate-data" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 w-full sm:w-auto px-4 py-2 rounded-lg font-medium transition-colors border border-indigo-200 text-sm flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                                    Recuperar Mis Datos
+                                </button>
+                                <p id="migration-status" class="text-xs text-indigo-600 mt-2 font-medium hidden"></p>
+                            </div>
+
+                            <!-- Loading state -->
+                            <div id="auth-loading" class="flex items-center gap-2 text-slate-400 py-4">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                <span class="text-sm font-medium">Verificando sesión...</span>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Matches Settings -->
@@ -335,6 +386,12 @@
             </div>
             <div class="p-6 overflow-y-auto flex-1">
                 <div class="text-sm text-slate-500 mb-4">Configura las acciones que estarán disponibles en este partido. Las acciones marcadas con [S] realizan una sustitución de jugador.</div>
+                
+                <div class="flex gap-2 mb-4 border-b border-slate-200">
+                     <button id="tab-match-propias" class="px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800">Propias</button>
+                     <button id="tab-match-rival" class="px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700">Rival</button>
+                </div>
+
                 <div id="list-acciones-config" class="space-y-2 mb-4">
                    <!-- acciones list renderizadas aqui -->
                 </div>
@@ -382,6 +439,15 @@
                         </select>
                         <input type="number" step="0.01" min="-5" max="5" id="input-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
                     </div>
+                    <div class="mb-3">
+                        <select id="input-accion-modulo" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="General">Módulo: General</option>
+                            <option value="Ataque">Módulo: Ataque</option>
+                            <option value="Defensa">Módulo: Defensa</option>
+                            <option value="Construcción">Módulo: Construcción</option>
+                            <option value="Portería">Módulo: Portería</option>
+                        </select>
+                    </div>
                     <div class="flex items-center space-x-2 mb-3">
                         <input type="checkbox" id="input-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
                         <label for="input-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
@@ -407,6 +473,12 @@
             </div>
             <div class="p-6 overflow-y-auto flex-1">
                 <div class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los NUEVOS partidos.</div>
+                
+                <div class="flex gap-2 mb-4 border-b border-slate-200">
+                     <button id="tab-global-propias" class="px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800">Propias</button>
+                     <button id="tab-global-rival" class="px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700">Rival</button>
+                </div>
+
                 <div id="list-global-acciones-config" class="space-y-2 mb-4">
                    <!-- acciones list renderizadas aqui -->
                 </div>
@@ -453,6 +525,15 @@
                             <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
                         </select>
                         <input type="number" step="0.01" min="-5" max="5" id="input-global-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
+                    </div>
+                    <div class="mb-3">
+                        <select id="input-global-accion-modulo" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="General">Módulo: General</option>
+                            <option value="Ataque">Módulo: Ataque</option>
+                            <option value="Defensa">Módulo: Defensa</option>
+                            <option value="Construcción">Módulo: Construcción</option>
+                            <option value="Portería">Módulo: Portería</option>
+                        </select>
                     </div>
                     <div class="flex items-center space-x-2 mb-3">
                         <input type="checkbox" id="input-global-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
@@ -782,10 +863,36 @@
             <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Añadir Jugador</h3><button id="btn-close-modal-jugador" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
             <div class="p-6 overflow-y-auto flex-1">
                 <form id="form-jugador" class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border shrink-0">
+                            <img id="preview-jugador-foto" src="" class="w-full h-full object-cover hidden">
+                            <i id="icon-jugador-foto" class="fa-solid fa-camera text-slate-400 text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Foto del Jugador (Opcional)</label>
+                            <input type="file" id="input-jugador-foto" accept="image/*" class="w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                            <input type="hidden" id="input-jugador-foto-base64" value="">
+                        </div>
+                    </div>
                     <input type="text" id="input-jugador-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
                     <select id="input-jugador-posicion" class="w-full px-3 py-2 border rounded-lg"><option value="Portero">Portero</option><option value="Central">Central</option><option value="Lateral">Lateral</option><option value="Mediocentro">Mediocentro</option><option value="Volante">Volante</option><option value="Delantero">Delantero</option></select>
-                    <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border rounded-lg" placeholder="Dorsal">
-                    <select id="input-jugador-estado" class="w-full px-3 py-2 border rounded-lg"><option value="Disponible">Disponible</option><option value="Tocado">Tocado</option><option value="Lesionado">Lesionado</option></select>
+                    <div class="flex gap-4">
+                        <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border rounded-lg" placeholder="Dorsal">
+                        <select id="input-jugador-estado" class="w-full px-3 py-2 border rounded-lg"><option value="Disponible">Disponible</option><option value="Tocado">Tocado</option><option value="Lesionado">Lesionado</option></select>
+                    </div>
+                    
+                    <div class="pt-2 border-t border-slate-100">
+                        <h4 class="font-bold text-sm text-slate-700 mb-3"><i class="fa-solid fa-chart-simple mr-2"></i> Estadísticas</h4>
+                        <div class="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                            <div class="col-span-4 sm:col-span-1"><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">Media</label><input type="number" id="input-jugador-media" value="50" min="1" max="99" class="w-full px-2 py-1 text-center font-bold border rounded bg-amber-50 text-amber-700 text-lg"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PAC</label><input type="number" id="input-jugador-ritmo" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">SHO</label><input type="number" id="input-jugador-tiro" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PAS</label><input type="number" id="input-jugador-pase" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">DRI</label><input type="number" id="input-jugador-regate" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">DEF</label><input type="number" id="input-jugador-defensa" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PHY</label><input type="number" id="input-jugador-fisico" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-jugador" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-jugador" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button></div>

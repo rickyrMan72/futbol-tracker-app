@@ -1,4 +1,4 @@
-import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { setEquipoActivo, equipoIdActivo } from './mod-jugadores.js';
 import { renderizarSesiones } from './mod-sesiones.js';
@@ -15,7 +15,9 @@ function cambiarEquipoActivo(id) {
 }
 
 export function initEquipos() {
-    onSnapshot(collection(db, 'equipos'), (snapshot) => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'equipos'), where('ownerId', '==', auth.currentUser.uid));
+    onSnapshot(q, (snapshot) => {
         todosLosEquipos = [];
         snapshot.forEach((doc) => todosLosEquipos.push({ id: doc.id, ...doc.data() }));
         
@@ -23,7 +25,7 @@ export function initEquipos() {
         todosLosEquipos.sort((a, b) => a.nombre.localeCompare(b.nombre));
         
         actualizarSelectEquipos();
-    });
+    }, (err) => {  if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     const closeModEq = bindModal('modal-equipo', 'btn-open-modal-equipo', 'btn-close-modal-equipo', 'btn-cancel-modal-equipo', () => {
         document.getElementById('form-equipo').reset();
@@ -54,6 +56,8 @@ export function initEquipos() {
                 await updateDoc(doc(db, 'equipos', editId), data);
                 mostrarNotificacion("Equipo actualizado"); 
             } else {
+                if (!auth.currentUser) throw new Error("No autenticado");
+                data.ownerId = auth.currentUser.uid;
                 data.createdAt = Date.now();
                 const docRef = await addDoc(collection(db, 'equipos'), data); 
                 mostrarNotificacion("Equipo añadido"); 

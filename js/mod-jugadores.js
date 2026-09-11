@@ -1,4 +1,4 @@
-import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 
 export let todosLosJugadores = [];
@@ -13,17 +13,57 @@ export function setEquipoActivo(id) {
 }
 
 export function initJugadores() {
-    onSnapshot(collection(db, 'jugadores'), (snapshot) => {
+    if (!auth.currentUser) return;
+    const q = query(collection(db, 'jugadores'), where('ownerId', '==', auth.currentUser.uid));
+    onSnapshot(q, (snapshot) => {
         todosLosJugadores = [];
         snapshot.forEach((doc) => todosLosJugadores.push({ id: doc.id, ...doc.data() }));
         todosLosJugadores.sort((a, b) => a.dorsal - b.dorsal);
         renderizar();
-    });
+    }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
 
     const closeModJug = bindModal('modal-jugador', 'btn-open-modal-jugador', 'btn-close-modal-jugador', 'btn-cancel-modal-jugador', () => {
         document.getElementById('form-jugador').reset();
+        document.getElementById('input-jugador-foto-base64').value = "";
+        document.getElementById('preview-jugador-foto').src = "";
+        document.getElementById('preview-jugador-foto').classList.add('hidden');
+        document.getElementById('icon-jugador-foto').classList.remove('hidden');
         delete document.getElementById('form-jugador').dataset.editId;
         document.querySelector('#modal-jugador h3').innerText = "Añadir Jugador";
+    });
+
+    document.getElementById('input-jugador-foto').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const maxSize = 200;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > height) {
+                    if (width > maxSize) { height = Math.round(height *= maxSize / width); width = maxSize; }
+                } else {
+                    if (height > maxSize) { width = Math.round(width *= maxSize / height); height = maxSize; }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                
+                document.getElementById('input-jugador-foto-base64').value = dataUrl;
+                document.getElementById('preview-jugador-foto').src = dataUrl;
+                document.getElementById('preview-jugador-foto').classList.remove('hidden');
+                document.getElementById('icon-jugador-foto').classList.add('hidden');
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
     });
 
     document.getElementById('btn-open-modal-jugador').addEventListener('click', () => {
@@ -45,7 +85,17 @@ export function initJugadores() {
             posicion: document.getElementById('input-jugador-posicion').value,
             dorsal: parseInt(document.getElementById('input-jugador-dorsal').value),
             estado: document.getElementById('input-jugador-estado').value,
-            equipoId: equipoIdActivo
+            equipoId: equipoIdActivo,
+            foto: document.getElementById('input-jugador-foto-base64').value,
+            stats: {
+                media: parseInt(document.getElementById('input-jugador-media').value) || 50,
+                ritmo: parseInt(document.getElementById('input-jugador-ritmo').value) || 50,
+                tiro: parseInt(document.getElementById('input-jugador-tiro').value) || 50,
+                pase: parseInt(document.getElementById('input-jugador-pase').value) || 50,
+                regate: parseInt(document.getElementById('input-jugador-regate').value) || 50,
+                defensa: parseInt(document.getElementById('input-jugador-defensa').value) || 50,
+                fisico: parseInt(document.getElementById('input-jugador-fisico').value) || 50
+            }
         };
         if (!data.nombre) return alert("Falta nombre");
         try { 
@@ -54,6 +104,8 @@ export function initJugadores() {
                 await updateDoc(doc(db, 'jugadores', editId), data);
                 mostrarNotificacion("Jugador actualizado"); 
             } else {
+                if (!auth.currentUser) throw new Error("No autenticado");
+                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'jugadores'), data); 
                 mostrarNotificacion("Jugador añadido"); 
             }
@@ -92,16 +144,47 @@ function renderizar() {
     jugadoresEquipo.forEach(jug => {
         let color = jug.estado === 'Tocado' ? 'bg-amber-500' : (jug.estado === 'Lesionado' ? 'bg-red-500' : 'bg-emerald-500');
         const card = document.createElement('div');
-        card.className = 'bg-white rounded-xl shadow-sm border p-5 flex flex-col items-center text-center group relative transition-all duration-300 hover:-translate-y-1 hover:shadow-md';
+        const stats = jug.stats || { media: 50, ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 };
+        let flagUrl = ''; 
+        
+        card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden';
         card.innerHTML = `
-            <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                <button class="btn-edit-jug w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${jug.id}" title="Editar Jugador"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-del-jug w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${jug.id}" title="Eliminar Jugador"><i class="fa-solid fa-trash"></i></button>
+            <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
+            <div class="absolute top-2 right-2 flex gap-1 z-[20]">
+                <button class="btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                <button class="btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
             </div>
-            <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-2xl relative mb-2"><i class="fa-solid fa-user"></i><div class="absolute -bottom-1 -right-1 w-4 h-4 ${color} rounded-full border-2 border-white" title="${jug.estado}"></div></div>
-            <div class="text-xs font-bold text-slate-400">#${jug.dorsal}</div>
-            <h4 class="font-bold text-slate-800 line-clamp-1 w-full" title="${jug.nombre}">${jug.nombre}</h4>
-            <p class="text-xs text-blue-600 font-bold uppercase">${jug.posicion}</p>
+            
+            <div class="w-full flex justify-between items-start mb-0 relative z-10 px-1">
+                <div class="flex flex-col items-center">
+                    <span class="text-2xl font-bold text-amber-950 leading-none">${stats.media}</span>
+                    <span class="text-[10px] font-bold text-amber-900 uppercase">${jug.posicion.substring(0, 3)}</span>
+                </div>
+                <div class="flex flex-col items-end gap-1 pt-1 opacity-80">
+                    <i class="fa-solid fa-futbol text-amber-900 text-sm drop-shadow-sm"></i>
+                    <div class="w-3 h-3 ${color} rounded-full border border-amber-900 shadow-sm" title="${jug.estado}"></div>
+                </div>
+            </div>
+
+            <div class="w-20 h-20 bg-amber-100/50 rounded-full border-2 border-amber-600/30 flex items-center justify-center text-4xl text-amber-800 shadow-inner relative z-10 mb-1 overflow-hidden">
+                ${jug.foto ? `<img src="${jug.foto}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-user drop-shadow-sm"></i>`}
+            </div>
+            
+            <div class="text-center w-full relative z-10">
+                <h4 class="font-bold text-amber-950 text-sm uppercase tracking-wider truncate px-1 border-b border-amber-900/20 pb-1">${jug.nombre}</h4>
+                <div class="text-[10px] text-amber-900 font-bold mb-1 opacity-70">#${jug.dorsal}</div>
+            </div>
+
+            <div class="w-full flex justify-center relative z-10 pb-1">
+                <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-bold text-amber-950">
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.ritmo}</span><span class="text-amber-800 uppercase font-normal">PAC</span></div>
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.regate}</span><span class="text-amber-800 uppercase font-normal">DRI</span></div>
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.tiro}</span><span class="text-amber-800 uppercase font-normal">SHO</span></div>
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.defensa}</span><span class="text-amber-800 uppercase font-normal">DEF</span></div>
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.pase}</span><span class="text-amber-800 uppercase font-normal">PAS</span></div>
+                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.fisico}</span><span class="text-amber-800 uppercase font-normal">PHY</span></div>
+                </div>
+            </div>
         `;
         
         card.querySelector('.btn-del-jug').addEventListener('click', async (e) => {
@@ -120,6 +203,28 @@ function renderizar() {
             document.getElementById('input-jugador-posicion').value = jug.posicion;
             document.getElementById('input-jugador-dorsal').value = jug.dorsal;
             document.getElementById('input-jugador-estado').value = jug.estado;
+            
+            const stats = jug.stats || { media:50, ritmo:50, tiro:50, pase:50, regate:50, defensa:50, fisico:50 };
+            document.getElementById('input-jugador-media').value = stats.media;
+            document.getElementById('input-jugador-ritmo').value = stats.ritmo;
+            document.getElementById('input-jugador-tiro').value = stats.tiro;
+            document.getElementById('input-jugador-pase').value = stats.pase;
+            document.getElementById('input-jugador-regate').value = stats.regate;
+            document.getElementById('input-jugador-defensa').value = stats.defensa;
+            document.getElementById('input-jugador-fisico').value = stats.fisico;
+
+            if (jug.foto) {
+                document.getElementById('input-jugador-foto-base64').value = jug.foto;
+                document.getElementById('preview-jugador-foto').src = jug.foto;
+                document.getElementById('preview-jugador-foto').classList.remove('hidden');
+                document.getElementById('icon-jugador-foto').classList.add('hidden');
+            } else {
+                document.getElementById('input-jugador-foto-base64').value = "";
+                document.getElementById('preview-jugador-foto').src = "";
+                document.getElementById('preview-jugador-foto').classList.add('hidden');
+                document.getElementById('icon-jugador-foto').classList.remove('hidden');
+            }
+
             document.getElementById('form-jugador').dataset.editId = jug.id;
             document.querySelector('#modal-jugador h3').innerText = "Editar Jugador";
             document.getElementById('modal-jugador').classList.remove('hidden');
