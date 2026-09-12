@@ -299,12 +299,18 @@ function abrirDirecto(id) {
 
     // Subscribe to efemerides
     if (unsubEfemerides) unsubEfemerides();
-    unsubEfemerides = onSnapshot(collection(db, 'partidos', id, 'efemerides'), (snapshot) => {
-        efemeridesList = [];
-        snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
-        efemeridesList.sort((a,b) => b.timestamp - a.timestamp); // Mas recientes primero
-        renderEfemerides();
-    }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+    if (auth.currentUser) {
+        const qEfem = query(
+            collection(db, 'partidos', id, 'efemerides'),
+            where('ownerId', '==', auth.currentUser.uid)
+        );
+        unsubEfemerides = onSnapshot(qEfem, (snapshot) => {
+            efemeridesList = [];
+            snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
+            efemeridesList.sort((a,b) => b.timestamp - a.timestamp); // Mas recientes primero
+            renderEfemerides();
+        }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+    }
 
     clearSeleccionJugador();
     
