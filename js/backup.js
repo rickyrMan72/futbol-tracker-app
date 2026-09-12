@@ -21,7 +21,10 @@ export async function exportarDatos() {
                 
                 if (coll === 'partidos') {
                     // Fetch subcollections for partidos
-                    const efemQ = query(collection(db, 'partidos', d.id, 'efemerides'));
+                    const efemQ = query(
+                        collection(db, 'partidos', d.id, 'efemerides'),
+                        where('ownerId', '==', auth.currentUser.uid)
+                    );
                     const efemSnap = await getDocs(efemQ);
                     data.efemerides = [];
                     efemSnap.forEach(efem => {

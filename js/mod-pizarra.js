@@ -212,7 +212,12 @@ function cargarJugadasEquipo() {
     if (!equipoIdActivo) return;
 
     try {
-        const q = query(collection(db, 'jugadas'), where('equipoId', '==', equipoIdActivo));
+        if (!auth.currentUser) return;
+        const q = query(
+            collection(db, 'jugadas'), 
+            where('equipoId', '==', equipoIdActivo),
+            where('ownerId', '==', auth.currentUser.uid)
+        );
         unsubscribeJugadas = onSnapshot(q, (snapshot) => {
             jugadasDelEquipo = [];
             sel.innerHTML = '<option value="">-- Nueva --</option>'; // reset on update

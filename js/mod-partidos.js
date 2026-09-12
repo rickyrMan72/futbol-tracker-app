@@ -498,7 +498,11 @@ async function abrirEstadisticas(par) {
     
     let efemerides = [];
     try {
-        const snap = await getDocs(collection(db, 'partidos', par.id, 'efemerides'));
+        const q = query(
+            collection(db, 'partidos', par.id, 'efemerides'),
+            where('ownerId', '==', auth.currentUser.uid)
+        );
+        const snap = await getDocs(q);
         snap.forEach(d => efemerides.push({id: d.id, ...d.data()}));
     } catch (e) {
         console.error("Error fetching efemerides:", e);
@@ -852,7 +856,13 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
         let distribucionUltimo = {};
         let distribucionTodos = {};
         
-        const efemPromises = partidosParaMedia.map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')));
+        const efemPromises = partidosParaMedia.map(p => {
+            const q = query(
+                collection(db, 'partidos', p.id, 'efemerides'),
+                where('ownerId', '==', auth.currentUser.uid)
+            );
+            return getDocs(q);
+        });
         const snaps = await Promise.all(efemPromises);
         
         snaps.forEach((snap, i) => {
