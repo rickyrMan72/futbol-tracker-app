@@ -212,7 +212,8 @@ export function initDirecto() {
                     minutoMs: msActuales,
                     periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
                     timestamp: Date.now(),
-                    creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon'
+                    creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+                    ownerId: auth.currentUser ? auth.currentUser.uid : 'anon'
                 });
                 mostrarNotificacion(`${accionObj.nombre} registrado`);
             }
@@ -896,6 +897,7 @@ async function registrarEfemeride(accDef, extraData = {}) {
         icon: accDef.icon,
         color: accDef.color,
         creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+        ownerId: auth.currentUser ? auth.currentUser.uid : 'anon',
         ...extraData
     };
 
