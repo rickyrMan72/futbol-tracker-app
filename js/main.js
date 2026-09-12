@@ -8,7 +8,7 @@ import { initPartidos } from './mod-partidos.js';
 import { initDirecto } from './mod-directo.js';
 import { initPizarra } from './mod-pizarra.js';
 import { initConfiguracion } from './mod-configuracion.js';
-import { migrarDatosAntiguos } from './migracion.js';
+import { exportarDatos, importarDatos } from './backup.js';
 
 let appInitialized = false;
 
@@ -63,7 +63,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('btn-migrate-data')?.addEventListener('click', migrarDatosAntiguos);
+    document.getElementById('btn-export-data')?.addEventListener('click', exportarDatos);
+    document.getElementById('input-import-data')?.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            importarDatos(e.target.files[0]);
+        }
+    });
 
     // 2. Conectar a Firebase y esperar estado de auth
     onAuthStateChanged(auth, async (user) => {
