@@ -1,4 +1,4 @@
-import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, auth } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, auth, query, where } from './firebase-config.js';
 import { mostrarNotificacion, confirmarAccion } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
 import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
@@ -203,19 +203,24 @@ export function initDirecto() {
 
             if (shouldAdd) {
                 const msActuales = calcularMsActuales();
-                await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
-                    tipo: accionObj.id,
-                    nombre: accionObj.nombre,
-                    icon: accionObj.icon,
-                    color: accionObj.color,
-                    tiempoAnotado: formatoCrono(msActuales),
-                    minutoMs: msActuales,
-                    periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
-                    timestamp: Date.now(),
-                    creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
-                    ownerId: auth.currentUser ? auth.currentUser.uid : 'anon'
-                });
-                mostrarNotificacion(`${accionObj.nombre} registrado`);
+                try {
+                    await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+                        tipo: accionObj.id,
+                        nombre: accionObj.nombre,
+                        icon: accionObj.icon,
+                        color: accionObj.color,
+                        tiempoAnotado: formatoCrono(msActuales),
+                        minutoMs: msActuales,
+                        periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
+                        timestamp: Date.now(),
+                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+                        ownerId: auth.currentUser ? auth.currentUser.uid : 'anon'
+                    });
+                    mostrarNotificacion(`${accionObj.nombre} registrado`);
+                } catch (err) {
+                    console.error("Error saving rival action:", err);
+                    mostrarNotificacion("Error al registrar acción", true);
+                }
             }
         });
     }
@@ -905,6 +910,7 @@ async function registrarEfemeride(accDef, extraData = {}) {
         await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), e);
         mostrarNotificacion(`${accDef.nombre} registrado`);
     } catch(err) {
+        console.error("Error al guardar acción:", err);
         mostrarNotificacion("Error al guardar acción", true);
     }
 
