@@ -3,15 +3,15 @@ import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWi
 import { getFirestore, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const firebaseConfig = {
-    projectId: "responsive-client-x07pf",
-    appId: "1:281075593314:web:9a356ddd0d8b17e983613b",
-    apiKey: "AIzaSyDWqXjSOiZDWleYHWiwGkhyrm0mY-ekPBo",
-    authDomain: "responsive-client-x07pf.firebaseapp.com",
-    storageBucket: "responsive-client-x07pf.firebasestorage.app",
-    messagingSenderId: "281075593314"
+  apiKey: "AIzaSyCEFyF--8CCDZNCAVjNPNMqHVlT13YlfkY",
+  authDomain: "futbol-tracker-pro.firebaseapp.com",
+  projectId: "futbol-tracker-pro",
+  storageBucket: "futbol-tracker-pro.firebasestorage.app",
+  messagingSenderId: "73174664755",
+  appId: "1:73174664755:web:a0bdf89f996274129b8546"
 };
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, "ai-studio-b3344664-12cc-4e29-b689-6c4b51d55662");
+export const db = getFirestore(app);
 export { signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithPopup, onAuthStateChanged, signOut, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer };
