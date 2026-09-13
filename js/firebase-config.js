@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
