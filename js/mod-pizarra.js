@@ -215,8 +215,7 @@ function cargarJugadasEquipo() {
         if (!auth.currentUser) return;
         const q = query(
             collection(db, 'jugadas'), 
-            where('equipoId', '==', equipoIdActivo),
-            where('ownerId', '==', auth.currentUser.uid)
+            where('equipoId', '==', equipoIdActivo)
         );
         unsubscribeJugadas = onSnapshot(q, (snapshot) => {
             jugadasDelEquipo = [];
@@ -295,8 +294,7 @@ async function guardarJugada() {
                 tacticaId: currentFormacion,
                 pasos: jugadaPasos,
                 createdAt: new Date(),
-                updatedAt: new Date(),
-                ownerId: auth.currentUser?.uid || ''
+                updatedAt: new Date()
             };
             const dataref = await addDoc(collection(db, 'jugadas'), data);
             currentJugadaId = dataref.id;

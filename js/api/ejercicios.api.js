@@ -1,9 +1,9 @@
 import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, auth, query, where } from '../firebase-config.js';
 
 export const ejerciciosApi = {
-    suscribir: (callback) => {
-        if (!auth.currentUser) return () => {};
-        const q = query(collection(db, 'ejercicios'), where('ownerId', '==', auth.currentUser.uid));
+    suscribir: (equipoId, callback) => {
+        if (!auth.currentUser || !equipoId) return () => {};
+        const q = query(collection(db, 'ejercicios'), where('equipoId', '==', equipoId));
         return onSnapshot(q, (snapshot) => {
             const ejercicios = [];
             snapshot.forEach((doc) => ejercicios.push({ id: doc.id, ...doc.data() }));
@@ -16,7 +16,6 @@ export const ejerciciosApi = {
 
     crear: async (datos) => {
         if (!auth.currentUser) throw new Error("No autenticado");
-        datos.ownerId = auth.currentUser.uid;
         return await addDoc(collection(db, 'ejercicios'), datos);
     },
 

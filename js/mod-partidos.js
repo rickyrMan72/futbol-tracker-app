@@ -6,6 +6,7 @@ import { DEFAULT_ACCIONES } from './mod-directo.js';
 import { getGlobalAcciones } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
+let unsubPartidos = null;
 const contenedor = document.getElementById('lista-partidos-container');
 
 let mostrarHistoricos = false;
@@ -14,19 +15,9 @@ let currentShareText = "";
 
 export function initPartidos() {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'partidos'), where('ownerId', '==', auth.currentUser.uid));
-    onSnapshot(q, (snapshot) => {
-        todosLosPartidos = [];
-        snapshot.forEach((doc) => todosLosPartidos.push({ id: doc.id, ...doc.data() }));
-        // Ordenar por fecha y hora (menor a mayor)
-        todosLosPartidos.sort((a, b) => {
-            const dateA = new Date(`${a.fecha}T${a.hora}`);
-            const dateB = new Date(`${b.fecha}T${b.hora}`);
-            return dateA - dateB;
-        });
-        renderizarPartidos();
-    }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
-
+    
+    // Subscription dynamically handled in renderizarPartidos
+    
     document.getElementById('btn-close-modal-estadisticas')?.addEventListener('click', () => {
         document.getElementById('modal-estadisticas').classList.add('hidden');
     });
@@ -216,7 +207,6 @@ export function initPartidos() {
                 };
                 data.configAcciones = getGlobalAcciones();
                 if (!auth.currentUser) throw new Error("No autenticado");
-                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'partidos'), data); 
                 mostrarNotificacion("Partido guardado"); 
             }
@@ -244,20 +234,46 @@ function añadirEventosCheckboxes() {
 export function renderizarPartidos() {
     const msgNoEquipo = document.getElementById('msg-no-equipo-partido');
     const btnAddPartido = document.getElementById('btn-open-modal-partido');
+    
+    if (unsubPartidos) {
+        unsubPartidos();
+        unsubPartidos = null;
+    }
 
     if (!equipoIdActivo) {
+        todosLosPartidos = [];
         contenedor.classList.add('hidden');
         if (msgNoEquipo) msgNoEquipo.classList.remove('hidden');
         if (btnAddPartido) btnAddPartido.disabled = true;
         return;
     }
+    
+    if (auth.currentUser) {
+        const q = query(collection(db, 'partidos'), where('equipoId', '==', equipoIdActivo));
+        unsubPartidos = onSnapshot(q, (snapshot) => {
+            todosLosPartidos = [];
+            snapshot.forEach((doc) => todosLosPartidos.push({ id: doc.id, ...doc.data() }));
+            todosLosPartidos.sort((a, b) => {
+                const dateA = new Date(`${a.fecha}T${a.hora}`);
+                const dateB = new Date(`${b.fecha}T${b.hora}`);
+                return dateA - dateB;
+            });
+            dibujarPartidos();
+        }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+    }
+}
+
+function dibujarPartidos() {
+    const msgNoEquipo = document.getElementById('msg-no-equipo-partido');
+    const btnAddPartido = document.getElementById('btn-open-modal-partido');
 
     contenedor.classList.remove('hidden');
     if (msgNoEquipo) msgNoEquipo.classList.add('hidden');
     if (btnAddPartido) btnAddPartido.disabled = false;
 
     const equipoActual = todosLosEquipos.find(eq => eq.id === equipoIdActivo);
-    const partidosEquipo = todosLosPartidos.filter(p => p.equipoId === equipoIdActivo);
+    const partidosEquipo = todosLosPartidos; // ya filtrados
+
 
     contenedor.innerHTML = partidosEquipo.length === 0 ? `<div class="col-span-full py-10 text-center text-slate-400">Sin partidos planificados</div>` : '';
 
@@ -352,8 +368,8 @@ export function renderizarPartidos() {
                 ${isFinalizadoMatch ? statsBtn : ''}
             </div>
             <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
-                <button class="btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
+                <button class="require-editor btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
+                <button class="require-editor btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
             </div>
             
             <div class="text-center font-bold text-slate-500 mb-4 mt-2 text-sm flex justify-center items-center gap-2">
@@ -498,10 +514,7 @@ async function abrirEstadisticas(par) {
     
     let efemerides = [];
     try {
-        const q = query(
-            collection(db, 'partidos', par.id, 'efemerides'),
-            where('ownerId', '==', auth.currentUser.uid)
-        );
+        const q = collection(db, 'partidos', par.id, 'efemerides');
         const snap = await getDocs(q);
         snap.forEach(d => efemerides.push({id: d.id, ...d.data()}));
     } catch (e) {
@@ -857,10 +870,7 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
         let distribucionTodos = {};
         
         const efemPromises = partidosParaMedia.map(p => {
-            const q = query(
-                collection(db, 'partidos', p.id, 'efemerides'),
-                where('ownerId', '==', auth.currentUser.uid)
-            );
+            const q = collection(db, 'partidos', p.id, 'efemerides');
             return getDocs(q);
         });
         const snaps = await Promise.all(efemPromises);

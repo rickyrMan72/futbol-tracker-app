@@ -9,6 +9,7 @@ export let todosLosEquipos = [];
 // Función para setear y renderizar todo
 function cambiarEquipoActivo(id) {
     setEquipoActivo(id);
+    actualizarPermisosUI();
     actualizarBotonesAccion(id);
     renderizarSesiones();
     renderizarPartidos();
@@ -16,7 +17,7 @@ function cambiarEquipoActivo(id) {
 
 export function initEquipos() {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'equipos'), where('ownerId', '==', auth.currentUser.uid));
+    const q = query(collection(db, 'equipos'), where('miembros', 'array-contains', auth.currentUser.uid));
     onSnapshot(q, (snapshot) => {
         todosLosEquipos = [];
         snapshot.forEach((doc) => todosLosEquipos.push({ id: doc.id, ...doc.data() }));
@@ -57,7 +58,9 @@ export function initEquipos() {
                 mostrarNotificacion("Equipo actualizado"); 
             } else {
                 if (!auth.currentUser) throw new Error("No autenticado");
-                data.ownerId = auth.currentUser.uid;
+                const uid = auth.currentUser.uid;
+                data.miembros = [uid];
+                data.roles = { [uid]: 'admin' };
                 data.createdAt = Date.now();
                 const docRef = await addDoc(collection(db, 'equipos'), data); 
                 mostrarNotificacion("Equipo añadido"); 
@@ -161,4 +164,18 @@ function actualizarSelectEquipos() {
         // If current selection is invalid, clear
         cambiarEquipoActivo("");
     }
+}
+
+export function getRolActual() {
+    if (!auth.currentUser) return 'viewer';
+    if (auth.currentUser.email === 'aquinogaona@gmail.com') return 'superadmin';
+    const equipo = todosLosEquipos.find(eq => eq.id === equipoIdActivo);
+    if (!equipo || !equipo.roles) return 'viewer';
+    return equipo.roles[auth.currentUser.uid] || 'viewer';
+}
+
+export function actualizarPermisosUI() {
+    const rol = getRolActual();
+    document.body.classList.remove('role-superadmin', 'role-admin', 'role-editor', 'role-viewer');
+    document.body.classList.add(`role-${rol}`);
 }

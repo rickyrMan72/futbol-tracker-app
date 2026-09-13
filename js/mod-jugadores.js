@@ -3,24 +3,37 @@ import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 
 export let todosLosJugadores = [];
 export let equipoIdActivo = null;
+let unsubJugadores = null;
 
 const contenedor = document.getElementById('lista-jugadores-container');
 
 export function setEquipoActivo(id) {
     equipoIdActivo = id;
-    renderizar();
+    
+    if (unsubJugadores) {
+        unsubJugadores();
+        unsubJugadores = null;
+    }
+    
+    if (id && auth.currentUser) {
+        const q = query(collection(db, 'jugadores'), where('equipoId', '==', id));
+        unsubJugadores = onSnapshot(q, (snapshot) => {
+            todosLosJugadores = [];
+            snapshot.forEach((doc) => todosLosJugadores.push({ id: doc.id, ...doc.data() }));
+            todosLosJugadores.sort((a, b) => a.dorsal - b.dorsal);
+            renderizar();
+        }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+    } else {
+        todosLosJugadores = [];
+        renderizar();
+    }
+    
     document.dispatchEvent(new Event('equipoModificado'));
 }
 
 export function initJugadores() {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'jugadores'), where('ownerId', '==', auth.currentUser.uid));
-    onSnapshot(q, (snapshot) => {
-        todosLosJugadores = [];
-        snapshot.forEach((doc) => todosLosJugadores.push({ id: doc.id, ...doc.data() }));
-        todosLosJugadores.sort((a, b) => a.dorsal - b.dorsal);
-        renderizar();
-    }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+
 
     const closeModJug = bindModal('modal-jugador', 'btn-open-modal-jugador', 'btn-close-modal-jugador', 'btn-cancel-modal-jugador', () => {
         document.getElementById('form-jugador').reset();
@@ -105,7 +118,6 @@ export function initJugadores() {
                 mostrarNotificacion("Jugador actualizado"); 
             } else {
                 if (!auth.currentUser) throw new Error("No autenticado");
-                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'jugadores'), data); 
                 mostrarNotificacion("Jugador añadido"); 
             }
@@ -151,8 +163,8 @@ function renderizar() {
         card.innerHTML = `
             <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
             <div class="absolute top-2 right-2 flex gap-1 z-[20]">
-                <button class="btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
-                <button class="btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                <button class="require-editor btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                <button class="require-editor btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
             </div>
             
             <div class="w-full flex justify-between items-start mb-0 relative z-10 px-1">

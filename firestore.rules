@@ -6,15 +6,25 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
     function isAdmin() {
-      return (request.auth != null && request.auth.token.email == 'aquinogaona@gmail.com') || exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return request.auth != null && request.auth.token.email == 'aquinogaona@gmail.com';
     }
-    
-    function isClaimable() {
-      return !('ownerId' in resource.data) || resource.data.ownerId == null || resource.data.ownerId == '';
+
+    // Role Based checks
+    function isTeamMember(equipoId) {
+      return request.auth.uid in get(/databases/$(database)/documents/equipos/$(equipoId)).data.miembros;
     }
-    
-    function isTeamOwner(equipoId) {
-      return get(/databases/$(database)/documents/equipos/$(equipoId)).data.ownerId == request.auth.uid;
+
+    function getRole(equipoId) {
+      return get(/databases/$(database)/documents/equipos/$(equipoId)).data.roles[request.auth.uid];
+    }
+
+    function isTeamAdmin(equipoId) {
+      return getRole(equipoId) == 'admin';
+    }
+
+    function isTeamEditor(equipoId) {
+      let role = getRole(equipoId);
+      return role == 'admin' || role == 'editor';
     }
 
     match /admins/{adminId} {
@@ -22,120 +32,92 @@ service cloud.firestore {
       allow write: if false; 
     }
 
+    // EQUIPOS
     match /equipos/{equipoId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(equipoId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
-      allow list: if isSignedIn(); 
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid in resource.data.miembros);
+      allow list: if isSignedIn();
       allow create: if isSignedIn() 
-                    && isValidId(equipoId) 
-                    && request.resource.data.ownerId == request.auth.uid
-                    && request.resource.data.nombre is string;
+                    && isValidId(equipoId)
+                    && request.auth.uid in request.resource.data.miembros
+                    && request.resource.data.roles[request.auth.uid] == 'admin';
       allow update: if isSignedIn() 
                     && isValidId(equipoId)
                     && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
+                      isAdmin() 
+                      || (request.auth.uid in resource.data.roles && resource.data.roles[request.auth.uid] == 'admin')
+                      || (
+                           request.auth.uid in resource.data.miembros 
+                           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'miembros'])
+                         )
+                      || (
+                           'invitacion_code' in request.resource.data
+                           && exists(/databases/$(database)/documents/invitaciones/$(request.resource.data.invitacion_code))
+                           && get(/databases/$(database)/documents/invitaciones/$(request.resource.data.invitacion_code)).data.equipoId == equipoId
+                         )
                     );
+      allow delete: if isSignedIn() && isValidId(equipoId) && (isAdmin() || (request.auth.uid in resource.data.roles && resource.data.roles[request.auth.uid] == 'admin'));
     }
 
+    // JUGADORES
     match /jugadores/{jugadorId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(jugadorId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || isTeamMember(resource.data.equipoId));
       allow list: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(jugadorId) 
-                    && request.resource.data.ownerId == request.auth.uid
-                    && (isAdmin() || isTeamOwner(request.resource.data.equipoId));
-      allow update: if isSignedIn() 
-                    && isValidId(jugadorId)
-                    && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
-                    );
+      allow create: if isSignedIn() && isValidId(jugadorId) && isTeamEditor(request.resource.data.equipoId);
+      allow update: if isSignedIn() && isValidId(jugadorId) && isTeamEditor(resource.data.equipoId);
+      allow delete: if isSignedIn() && isValidId(jugadorId) && isTeamEditor(resource.data.equipoId);
     }
 
+    // EJERCICIOS
     match /ejercicios/{ejercicioId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(ejercicioId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || isTeamMember(resource.data.equipoId));
       allow list: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(ejercicioId) 
-                    && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isSignedIn() 
-                    && isValidId(ejercicioId)
-                    && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
-                    );
+      allow create: if isSignedIn() && isValidId(ejercicioId) && isTeamEditor(request.resource.data.equipoId);
+      allow update: if isSignedIn() && isValidId(ejercicioId) && isTeamEditor(resource.data.equipoId);
+      allow delete: if isSignedIn() && isValidId(ejercicioId) && isTeamEditor(resource.data.equipoId);
     }
 
+    // SESIONES
     match /sesiones/{sesionId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(sesionId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || isTeamMember(resource.data.equipoId));
       allow list: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(sesionId) 
-                    && request.resource.data.ownerId == request.auth.uid
-                    && (isAdmin() || isTeamOwner(request.resource.data.equipoId));
-      allow update: if isSignedIn() 
-                    && isValidId(sesionId)
-                    && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
-                    );
+      allow create: if isSignedIn() && isValidId(sesionId) && isTeamEditor(request.resource.data.equipoId);
+      allow update: if isSignedIn() && isValidId(sesionId) && isTeamEditor(resource.data.equipoId);
+      allow delete: if isSignedIn() && isValidId(sesionId) && isTeamEditor(resource.data.equipoId);
     }
 
+    // PARTIDOS
     match /partidos/{partidoId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(partidoId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || isTeamMember(resource.data.equipoId));
       allow list: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(partidoId) 
-                    && request.resource.data.ownerId == request.auth.uid
-                    && (isAdmin() || isTeamOwner(request.resource.data.equipoId));
-      allow update: if isSignedIn() 
-                    && isValidId(partidoId)
-                    && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
-                    );
-
+      allow create: if isSignedIn() && isValidId(partidoId) && isTeamEditor(request.resource.data.equipoId);
+      allow update: if isSignedIn() && isValidId(partidoId) && isTeamEditor(resource.data.equipoId);
+      allow delete: if isSignedIn() && isValidId(partidoId) && isTeamEditor(resource.data.equipoId);
+      
       match /efemerides/{efemerideId} {
-        allow read: if isSignedIn() && isValidId(partidoId) && (isAdmin() || get(/databases/$(database)/documents/partidos/$(partidoId)).data.ownerId == request.auth.uid || !('ownerId' in get(/databases/$(database)/documents/partidos/$(partidoId)).data));
-        allow delete: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId)
-                            && (isAdmin() || get(/databases/$(database)/documents/partidos/$(partidoId)).data.ownerId == request.auth.uid);
+        allow read: if isSignedIn() && isValidId(partidoId) && (isAdmin() || isTeamMember(get(/databases/$(database)/documents/partidos/$(partidoId)).data.equipoId));
         allow list: if isSignedIn() && isValidId(partidoId);
-        allow create: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId)
-                            && (isAdmin() || get(/databases/$(database)/documents/partidos/$(partidoId)).data.ownerId == request.auth.uid || !('ownerId' in get(/databases/$(database)/documents/partidos/$(partidoId)).data));
-        allow update: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId)
-                            && (
-                              isAdmin()
-                              || get(/databases/$(database)/documents/partidos/$(partidoId)).data.ownerId == request.auth.uid 
-                              || !('ownerId' in get(/databases/$(database)/documents/partidos/$(partidoId)).data)
-                            );
+        allow create: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId) && isTeamEditor(get(/databases/$(database)/documents/partidos/$(partidoId)).data.equipoId);
+        allow update: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId) && isTeamEditor(get(/databases/$(database)/documents/partidos/$(partidoId)).data.equipoId);
+        allow delete: if isSignedIn() && isValidId(partidoId) && isValidId(efemerideId) && isTeamEditor(get(/databases/$(database)/documents/partidos/$(partidoId)).data.equipoId);
       }
     }
 
+    // JUGADAS
     match /jugadas/{jugadaId} {
-      allow read: if isSignedIn() && (isAdmin() || resource.data.ownerId == request.auth.uid || isClaimable());
-      allow delete: if isSignedIn() && isValidId(jugadaId) && (isAdmin() || resource.data.ownerId == request.auth.uid);
+      allow read: if isSignedIn() && (isAdmin() || isTeamMember(resource.data.equipoId));
       allow list: if isSignedIn();
-      allow create: if isSignedIn() 
-                    && isValidId(jugadaId) 
-                    && request.resource.data.ownerId == request.auth.uid
-                    && (isAdmin() || isTeamOwner(request.resource.data.equipoId));
-      allow update: if isSignedIn() 
-                    && isValidId(jugadaId)
-                    && (
-                      isAdmin()
-                      || ( resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId )
-                      || ( isClaimable() && request.resource.data.ownerId == request.auth.uid )
-                    );
+      allow create: if isSignedIn() && isValidId(jugadaId) && isTeamEditor(request.resource.data.equipoId);
+      allow update: if isSignedIn() && isValidId(jugadaId) && isTeamEditor(resource.data.equipoId);
+      allow delete: if isSignedIn() && isValidId(jugadaId) && isTeamEditor(resource.data.equipoId);
+    }
+    
+    // INVITACIONES
+    match /invitaciones/{invitacionId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isTeamAdmin(request.resource.data.equipoId);
+      allow update: if false; 
+      allow delete: if isSignedIn();
     }
   }
 }

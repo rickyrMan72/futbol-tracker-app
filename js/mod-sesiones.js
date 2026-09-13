@@ -4,18 +4,14 @@ import { todosLosEjercicios } from './mod-ejercicios.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 
 let todasLasSesiones = [];
+let unsubSesiones = null;
 const contenedor = document.getElementById('lista-sesiones-container');
 
 export function initSesiones() {
     if (!auth.currentUser) return;
-    const q = query(collection(db, 'sesiones'), where('ownerId', '==', auth.currentUser.uid));
-    onSnapshot(q, (snapshot) => {
-        todasLasSesiones = [];
-        snapshot.forEach((doc) => todasLasSesiones.push({ id: doc.id, ...doc.data() }));
-        todasLasSesiones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-        renderizarSesiones();
-    }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
-
+    
+    // The subscription will be handled dynamically in renderizarSesiones()
+    
     const prepSesion = () => {
         if (!document.getElementById('form-sesion').dataset.editId) {
             document.getElementById('sesion-ejercicios-list').innerHTML = todosLosEjercicios.map(ej => `<label><input type="checkbox" value="${ej.id}" class="chk-ej"> ${ej.nombre}</label>`).join('<br>');
@@ -59,7 +55,6 @@ export function initSesiones() {
                 mostrarNotificacion("Sesión actualizada"); 
             } else {
                 if (!auth.currentUser) throw new Error("No autenticado");
-                data.ownerId = auth.currentUser.uid;
                 await addDoc(collection(db, 'sesiones'), data); 
                 mostrarNotificacion("Sesión guardada"); 
             }
@@ -72,7 +67,13 @@ export function renderizarSesiones() {
     const msgNoEquipo = document.getElementById('msg-no-equipo-sesion');
     const btnAddSesion = document.getElementById('btn-open-modal-sesion');
 
+    if (unsubSesiones) {
+        unsubSesiones();
+        unsubSesiones = null;
+    }
+
     if (!equipoIdActivo) {
+        todasLasSesiones = [];
         contenedor.classList.add('hidden');
         if (msgNoEquipo) msgNoEquipo.classList.remove('hidden');
         if (btnAddSesion) btnAddSesion.disabled = true;
@@ -81,12 +82,27 @@ export function renderizarSesiones() {
         if (dashEntreno) dashEntreno.innerText = "Sin planificar";
         return;
     }
+    
+    if (auth.currentUser) {
+        const q = query(collection(db, 'sesiones'), where('equipoId', '==', equipoIdActivo));
+        unsubSesiones = onSnapshot(q, (snapshot) => {
+            todasLasSesiones = [];
+            snapshot.forEach((doc) => todasLasSesiones.push({ id: doc.id, ...doc.data() }));
+            todasLasSesiones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            dibujarSesiones();
+        }, (err) => { if(err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
+    }
+}
+
+function dibujarSesiones() {
+    const msgNoEquipo = document.getElementById('msg-no-equipo-sesion');
+    const btnAddSesion = document.getElementById('btn-open-modal-sesion');
 
     contenedor.classList.remove('hidden');
     if (msgNoEquipo) msgNoEquipo.classList.add('hidden');
     if (btnAddSesion) btnAddSesion.disabled = false;
 
-    const sesionesEquipo = todasLasSesiones.filter(s => s.equipoId === equipoIdActivo);
+    const sesionesEquipo = todasLasSesiones; // Ya filtradas por la query
 
     contenedor.innerHTML = sesionesEquipo.length === 0 ? `<div class="col-span-full py-10 text-center text-slate-400">Sin sesiones planificadas para este equipo</div>` : '';
     const dashEntreno = document.getElementById('dash-proximo-entreno');
@@ -97,8 +113,8 @@ export function renderizarSesiones() {
         card.className = 'bg-white rounded-xl shadow-sm border p-5 relative flex flex-col group transition-all duration-300 hover:-translate-y-1 hover:shadow-md';
         card.innerHTML = `
             <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                <button class="btn-edit-ses w-8 h-8 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-full transition-colors" data-id="${ses.id}" title="Editar Sesión"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn-del-ses w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${ses.id}" title="Eliminar Sesión"><i class="fa-solid fa-trash"></i></button>
+                <button class="require-editor btn-edit-ses w-8 h-8 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-full transition-colors" data-id="${ses.id}" title="Editar Sesión"><i class="fa-solid fa-pen"></i></button>
+                <button class="require-editor btn-del-ses w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${ses.id}" title="Eliminar Sesión"><i class="fa-solid fa-trash"></i></button>
             </div>
             <div class="font-bold text-slate-700 mb-2">${ses.fecha}</div>
             <h4 class="font-bold text-lg mb-2 line-clamp-2" title="${ses.objetivo}">${ses.objetivo}</h4>

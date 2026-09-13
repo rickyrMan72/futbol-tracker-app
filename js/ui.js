@@ -45,9 +45,17 @@ export function bindModal(idModal, idBtnOpen, idBtnClose, idBtnCancel, funcExtra
     const modal = document.getElementById(idModal);
     const openModal = () => { if(funcExtraOpen) funcExtraOpen(); modal.classList.remove('hidden'); };
     const closeModal = () => modal.classList.add('hidden');
-    document.getElementById(idBtnOpen).addEventListener('click', openModal);
-    document.getElementById(idBtnClose).addEventListener('click', closeModal);
-    document.getElementById(idBtnCancel).addEventListener('click', closeModal);
+    
+    const btnOpen = document.getElementById(idBtnOpen);
+    if (btnOpen) btnOpen.addEventListener('click', openModal);
+    
+    const btnClose = document.getElementById(idBtnClose);
+    if (btnClose) btnClose.addEventListener('click', closeModal);
+    
+    if (idBtnCancel) {
+        const btnCancel = document.getElementById(idBtnCancel);
+        if (btnCancel) btnCancel.addEventListener('click', closeModal);
+    }
     return closeModal;
 }
 

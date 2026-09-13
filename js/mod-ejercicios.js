@@ -1,14 +1,30 @@
 import { ejerciciosApi } from './api/ejercicios.api.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { initCanvas, getCanvas, drawField, resizeCanvas, saveState, clearUndoStack, updateStepUI } from './components/pizarra.js';
+import { equipoIdActivo } from './mod-jugadores.js';
 
 export let todosLosEjercicios = [];
+let unsubEjercicios = null;
 const contenedor = document.getElementById('lista-ejercicios-container');
 
-export function initEjercicios() {
-    ejerciciosApi.suscribir((ejercicios) => {
+function cargarEjercicios() {
+    if (unsubEjercicios) unsubEjercicios();
+    if (!equipoIdActivo) {
+        todosLosEjercicios = [];
+        renderizar();
+        return;
+    }
+    unsubEjercicios = ejerciciosApi.suscribir(equipoIdActivo, (ejercicios) => {
         todosLosEjercicios = ejercicios;
         renderizar();
+    });
+}
+
+export function initEjercicios() {
+    cargarEjercicios();
+    
+    document.addEventListener('equipoModificado', () => {
+        cargarEjercicios();
     });
 
     const updateDuracion = () => {
@@ -44,6 +60,7 @@ export function initEjercicios() {
         }
 
         const data = {
+            equipoId: equipoIdActivo,
             nombre: document.getElementById('input-nombre').value,
             categoria: document.getElementById('input-categoria').value,
             modalidad: document.getElementById('input-modalidad').value,
@@ -180,7 +197,15 @@ export function initEjercicios() {
 }
 
 function renderizar() {
-    contenedor.innerHTML = todosLosEjercicios.length === 0 ? `<div class="col-span-full py-10 text-slate-400 text-center"><p>No hay ejercicios.</p></div>` : '';
+    const btnAdd = document.getElementById('btn-open-modal');
+    if (!equipoIdActivo) {
+        contenedor.innerHTML = `<div class="col-span-full py-10 text-slate-400 text-center"><p>Selecciona un equipo para ver los ejercicios.</p></div>`;
+        if (btnAdd) btnAdd.disabled = true;
+        return;
+    }
+    if (btnAdd) btnAdd.disabled = false;
+
+    contenedor.innerHTML = todosLosEjercicios.length === 0 ? `<div class="col-span-full py-10 text-slate-400 text-center"><p>No hay ejercicios en este equipo.</p></div>` : '';
     todosLosEjercicios.forEach(ej => {
         let color = ej.categoria === 'Táctico' ? 'bg-blue-500' : (ej.categoria === 'Físico' ? 'bg-emerald-500' : 'bg-amber-500');
         
@@ -209,7 +234,7 @@ function renderizar() {
         const badgeModalidad = (ej.modalidad && ej.modalidad !== 'Ambos') ? `<span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0 border border-slate-200" title="Modalidad"><i class="fa-solid fa-futbol mr-1"></i>${ej.modalidad}</span>` : '';
 
         card.innerHTML = `
-            <button class="btn-del absolute top-2 left-2 z-10 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full drop-shadow-md flex items-center justify-center cursor-pointer transition-colors" title="Eliminar ejercicio" data-id="${ej.id}"><i class="fa-solid fa-trash pointer-events-none"></i></button>
+            <button class="require-editor btn-del absolute top-2 left-2 z-10 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full drop-shadow-md flex items-center justify-center cursor-pointer transition-colors" title="Eliminar ejercicio" data-id="${ej.id}"><i class="fa-solid fa-trash pointer-events-none"></i></button>
             ${headerHTML}
             <div class="p-4 flex flex-col flex-1">
                 <div class="flex flex-col gap-1 mb-2">
@@ -224,7 +249,7 @@ function renderizar() {
                 </div>
                 ${ej.material ? `<p class="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-100 mb-2 truncate"><i class="fa-solid fa-bullseye mr-1"></i>${ej.material}</p>` : ''}
                 <p class="text-sm text-slate-500 line-clamp-3 mb-4 flex-1 whitespace-pre-wrap">${ej.descripcion}</p>
-                <button class="btn-edit w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors" data-id="${ej.id}">
+                <button class="require-editor btn-edit w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-sm font-medium transition-colors" data-id="${ej.id}">
                     <i class="fa-solid fa-pen-to-square mr-1"></i> Editar Ejercicio
                 </button>
             </div>

@@ -213,8 +213,7 @@ export function initDirecto() {
                         minutoMs: msActuales,
                         periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
                         timestamp: Date.now(),
-                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
-                        ownerId: auth.currentUser ? auth.currentUser.uid : 'anon'
+                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon'
                     });
                     mostrarNotificacion(`${accionObj.nombre} registrado`);
                 } catch (err) {
@@ -306,10 +305,7 @@ function abrirDirecto(id) {
     // Subscribe to efemerides
     if (unsubEfemerides) unsubEfemerides();
     if (auth.currentUser) {
-        const qEfem = query(
-            collection(db, 'partidos', id, 'efemerides'),
-            where('ownerId', '==', auth.currentUser.uid)
-        );
+        const qEfem = collection(db, 'partidos', id, 'efemerides');
         unsubEfemerides = onSnapshot(qEfem, (snapshot) => {
             efemeridesList = [];
             snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
@@ -607,8 +603,8 @@ function renderListaConfigAcciones() {
                     <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''} ${mod !== 'General' ? `<span class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded ml-1 border border-blue-100">${mod}</span>` : ''}</span>
                 </div>
                 <div class="flex gap-1 shrink-0">
-                    <button class="btn-edit-accion w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn-delete-accion w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    <button class="require-editor btn-edit-accion w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                    <button class="require-editor btn-delete-accion w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition-colors" data-id="${acc.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
                 </div>
             </div>
         `;
@@ -902,7 +898,6 @@ async function registrarEfemeride(accDef, extraData = {}) {
         icon: accDef.icon,
         color: accDef.color,
         creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
-        ownerId: auth.currentUser ? auth.currentUser.uid : 'anon',
         ...extraData
     };
 
@@ -1063,7 +1058,7 @@ function renderEfemerides() {
                     <div class="text-xs sm:text-sm font-bold text-slate-600 mb-0.5 truncate">${e.nombre}</div>
                     <div class="text-[10px] sm:text-xs truncate">${desc}</div>
                 </div>
-                <button class="btn-del-efemeride text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 transition-opacity p-1 sm:p-2 shrink-0" data-id="${e.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                <button class="require-editor btn-del-efemeride text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 transition-opacity p-1 sm:p-2 shrink-0" data-id="${e.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
             </div>
         `;
     }).join('');

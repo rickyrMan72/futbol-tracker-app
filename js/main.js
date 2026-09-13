@@ -1,13 +1,14 @@
 import { auth, GoogleAuthProvider, signInWithPopup, linkWithPopup, signOut, onAuthStateChanged, signInAnonymously } from './firebase-config.js';
 import { initNavigation, initChart } from './ui.js';
 import { initEjercicios } from './mod-ejercicios.js';
-import { initEquipos } from './mod-equipos.js';
+import { initEquipos, actualizarPermisosUI } from './mod-equipos.js';
 import { initJugadores } from './mod-jugadores.js';
 import { initSesiones } from './mod-sesiones.js';
 import { initPartidos } from './mod-partidos.js';
 import { initDirecto } from './mod-directo.js';
 import { initPizarra } from './mod-pizarra.js';
 import { initConfiguracion } from './mod-configuracion.js';
+import { initColaboradores } from './mod-colaboradores.js';
 import { exportarDatos, importarDatos } from './backup.js';
 
 let appInitialized = false;
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Always initialize/re-initialize modules when user state becomes valid
+            actualizarPermisosUI();
             initEjercicios();
             initEquipos();
             initJugadores();
@@ -112,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             initDirecto();
             initPizarra();
             initConfiguracion();
+            initColaboradores();
             appInitialized = true;
         } else {
             statusBadge.innerHTML = '<i class="fa-solid fa-cloud-arrow-down text-slate-500 mr-1"></i> Desconectado';
