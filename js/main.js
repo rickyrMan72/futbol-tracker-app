@@ -117,6 +117,13 @@ document.addEventListener('DOMContentLoaded', () => {
             initColaboradores();
             appInitialized = true;
         } else {
+            // Automatically sign in anonymously if no user is found
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Error signing in anonymously:", error);
+            }
+            
             statusBadge.innerHTML = '<i class="fa-solid fa-cloud-arrow-down text-slate-500 mr-1"></i> Desconectado';
             statusBadge.classList.replace('text-emerald-700', 'text-slate-500');
             statusBadge.classList.replace('bg-emerald-100', 'bg-slate-100');
@@ -124,10 +131,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (authLoggedOut) authLoggedOut.classList.remove('hidden');
             if (authLoggedIn) authLoggedIn.classList.add('hidden');
 
-            // Do not init DB modules here if there is no user! App will prompt for login.
             if (!appInitialized) {
                 appInitialized = true;
-                // Just init UI configuration parts that don't need DB
                 initConfiguracion();
             }
         }
