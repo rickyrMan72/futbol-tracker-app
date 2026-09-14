@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FútbolApp - Gestión Deportiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        
+        /* Control de Permisos Globales */
+        body.role-viewer .require-editor { display: none !important; }
+        body.role-viewer .require-admin { display: none !important; }
+        body.role-editor .require-admin { display: none !important; }
+        body:not(.role-superadmin) .require-superadmin { display: none !important; }
+        
+        /* Show warnings when tools are hidden */
+        body.role-viewer #config-admin-warning, body.role-editor #config-admin-warning { display: block !important; }
+        /* Disable interaction on lists for viewers */
+        body.role-viewer #directo-jugadores-list { pointer-events: none; }
+        body.role-viewer #directo-acciones-list { pointer-events: none; }
+        body.role-viewer #directo-acciones-rival-list { display: none !important; }
+        body.role-viewer #pizarra-campo-container { pointer-events: none; }
+        body.role-viewer #pizarra-formacion { pointer-events: none; opacity: 0.5; }
+        body.role-viewer #btn-pizarra-reset { display: none !important; }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 flex h-screen overflow-hidden">
+
+    <!-- BARRA LATERAL (SIDEBAR) -->
+    <aside id="sidebar" class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+            <i class="fa-solid fa-futbol text-emerald-400 text-xl mr-3"></i>
+            <span class="text-white font-bold text-lg tracking-wide">FútbolApp</span>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-4">
+            <ul class="space-y-1" id="nav-menu">
+                <li><a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-house w-6 text-center mr-2"></i><span class="font-medium">Inicio</span></a></li>
+                <li><a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-users w-6 text-center mr-2"></i><span class="font-medium">Plantilla</span></a></li>
+                <li><a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i><span class="font-medium">Ejercicios</span></a></li>
+                <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium">Sesiones</span></a></li>
+                <li><a href="#" data-target="view-partidos" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-trophy w-6 text-center mr-2"></i><span class="font-medium">Partidos</span></a></li>
+                <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium">Pizarra</span></a></li>
+            </ul>
+        </nav>
+        <div class="mt-auto pb-4">
+            <ul class="space-y-1">
+                <li><a href="#" data-target="view-configuracion" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-gear w-6 text-center mr-2"></i><span class="font-medium">Configuración</span></a></li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <div class="flex-1 flex flex-col overflow-hidden relative">
+        <header class="h-16 bg-emerald-700 sm:bg-white shadow-sm flex items-center justify-between px-4 sm:px-6 z-10 flex-shrink-0">
+            <div class="flex items-center gap-3 sm:gap-4 w-full">
+                <button id="btn-mobile-menu" class="text-white sm:text-slate-500 hover:text-slate-200 sm:hover:text-slate-800"><i class="fa-solid fa-bars text-xl"></i></button>
+                <h2 id="header-title" class="text-lg sm:text-xl font-semibold text-white sm:text-slate-800 hidden xl:block min-w-max mr-2">Panel de Control</h2>
+                
+                <!-- SELECTOR DE EQUIPO GLOBAL -->
+                <div class="flex items-center gap-1 sm:gap-2 flex-1 sm:flex-none">
+                    <div id="equipo-escudo-container" class="w-8 h-8 rounded-full border border-slate-200 bg-white sm:bg-slate-50 flex items-center justify-center overflow-hidden hidden shrink-0 shadow-sm">
+                        <img id="equipo-escudo-img" src="" class="w-full h-full object-contain" alt="Escudo">
+                    </div>
+                    <select id="select-equipo" class="w-full sm:w-auto px-2 py-1.5 border rounded-lg focus:ring-blue-500 text-sm font-medium text-slate-800 truncate">
+                        <option value="">Selecciona un equipo...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="hidden sm:flex items-center space-x-4 pl-4 min-w-max">
+                <span id="db-status" class="text-xs font-bold px-2 py-1 rounded bg-slate-100 text-slate-500"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> Conectando BD...</span>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8 bg-slate-50 relative">
+            
+            <!-- VISTA 1: DASHBOARD -->
+            <div id="view-dashboard" class="app-view fade-in">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Próximo Entreno</h3><div class="p-2 bg-blue-50 rounded-lg text-blue-500"><i class="fa-regular fa-calendar-check"></i></div></div>
+                        <p class="text-2xl font-bold text-slate-800" id="dash-proximo-entreno">Sin planificar</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Disponibilidad</h3><div class="p-2 bg-emerald-50 rounded-lg text-emerald-500"><i class="fa-solid fa-shirt"></i></div></div>
+                        <p class="text-2xl font-bold text-slate-800" id="contador-disponibles">0 <span class="text-lg text-slate-400">/ 0</span></p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                        <div class="flex items-center justify-between mb-4"><h3 class="text-slate-500 text-sm font-medium uppercase">Objetivo Semanal</h3><div class="p-2 bg-purple-50 rounded-lg text-purple-500"><i class="fa-solid fa-bullseye"></i></div></div>
+                        <p class="text-lg font-bold text-slate-800">Presión Alta (65%)</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 hidden" id="dash-chart-card">
+                    <div class="flex justify-between items-center mb-6"><h3 class="text-lg font-bold text-slate-800" id="dash-chart-title">Datos del Último Partido</h3></div>
+                    <div class="chart-container"><canvas id="rendimientoChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- VISTA 2: PLANTILLA -->
+            <div id="view-plantilla" class="app-view hidden fade-in">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <p class="text-slate-500 text-sm">Gestiona los jugadores de tu equipo activo.</p>
+                    <button id="btn-open-modal-jugador" class="require-editor w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-user-plus mr-2"></i> Añadir Jugador
+                    </button>
+                </div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-plantilla" class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para ver la plantilla.</p>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6 hidden" id="lista-jugadores-container"></div>
+            </div>
+
+            <!-- VISTA 3: EJERCICIOS -->
+            <div id="view-ejercicios" class="app-view hidden fade-in">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <p class="text-slate-500 text-sm">Biblioteca de tareas de entrenamiento.</p>
+                    <button id="btn-open-modal" class="require-editor bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-plus mr-2"></i> Nuevo Ejercicio</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="lista-ejercicios-container"></div>
+            </div>
+
+            <!-- VISTA 4: SESIONES -->
+            <div id="view-sesiones" class="app-view hidden fade-in">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <p class="text-slate-500 text-sm">Planifica entrenamientos para tu equipo activo.</p>
+                    <button id="btn-open-modal-sesion" class="require-editor w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-calendar-plus mr-2"></i> Nueva Sesión</button>
+                </div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-sesion" class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para planificar sesiones.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 hidden" id="lista-sesiones-container"></div>
+            </div>
+            <div id="view-partidos" class="app-view hidden fade-in flex-1 flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 shrink-0">
+                    <p class="text-slate-500 text-sm">Gestiona los partidos de tu equipo activo.</p>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button id="btn-toggle-historicos" class="flex-1 sm:flex-none justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Ver Históricos</button>
+                        <button id="btn-open-modal-partido" class="require-editor flex-1 sm:flex-none justify-center bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-plus mr-2"></i> Nuevo Partido</button>
+                    </div>
+                </div>
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-partido" class="flex flex-col items-center justify-center py-16 text-slate-400 shrink-0">
+                    <i class="fa-solid fa-shield-halved text-6xl mb-4 text-slate-200"></i>
+                    <p class="text-lg text-center">Selecciona o crea un equipo en la parte superior para gestionar partidos.</p>
+                </div>
+                <div class="space-y-4 hidden flex-1 overflow-y-auto overflow-x-hidden pb-6 px-3 -mx-3" id="lista-partidos-container"></div>
+            </div>
+            
+            <!-- VISTA 6: DIRECTO (EFEMÉRIDES) -->
+            <div id="view-directo" class="app-view hidden fade-in absolute inset-0 p-4 lg:p-8 flex flex-col bg-slate-50 z-10">
+                <div class="flex justify-between items-center mb-2 shrink-0">
+                    <button id="btn-back-partidos" class="text-slate-500 hover:text-slate-800 transition-colors"><i class="fa-solid fa-arrow-left mr-2"></i> Volver</button>
+                    <h3 id="directo-titulo-partido" class="font-bold text-base sm:text-lg text-slate-800 truncate px-2">Cargando...</h3>
+                    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <button id="btn-config-acciones" class="require-editor text-slate-500 hover:text-slate-800 transition-colors px-1" title="Configurar Acciones"><i class="fa-solid fa-gear text-lg"></i></button>
+                    </div>
+                </div>
+
+                <!-- TOP: Crono -->
+                <div class="bg-slate-800 text-white rounded-xl shadow-lg p-3 mb-2 flex flex-row items-center justify-between shrink-0">
+                    <div class="flex flex-col items-start gap-0.5">
+                        <div class="text-3xl sm:text-4xl font-mono font-bold tracking-wider leading-none" id="directo-cronometro">00:00</div>
+                        <div class="text-[10px] sm:text-xs text-slate-400 uppercase tracking-widest font-semibold leading-none" id="directo-periodo">1ª Parte</div>
+                    </div>
+                    
+                    <div class="flex flex-col items-center justify-center">
+                        <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">Marcador</div>
+                        <div class="flex items-center gap-3 bg-slate-900/50 px-3 py-1 rounded-lg">
+                            <span class="text-xl sm:text-2xl font-bold text-emerald-400" id="directo-marcador-mio">0</span>
+                            <span class="text-slate-500">-</span>
+                            <span class="text-xl sm:text-2xl font-bold text-rose-400" id="directo-marcador-rival">0</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 items-center require-editor">
+                        <button id="btn-crono-start" class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 hover:bg-emerald-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg" title="Iniciar/Reanudar"><i class="fa-solid fa-play ml-1"></i></button>
+                        <button id="btn-crono-pause" class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 hover:bg-amber-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg hidden" title="Pausar"><i class="fa-solid fa-pause"></i></button>
+                        <button id="btn-crono-next" class="px-3 sm:px-4 h-10 sm:h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-colors shadow-lg ml-1 sm:ml-2" title="Fin del periodo / Siguiente"><span class="hidden sm:inline">2ª Parte</span> <i class="fa-solid fa-forward-step sm:ml-2"></i></button>
+                    </div>
+                </div>
+
+                <!-- MIDDLE: Jugadores y Acciones -->
+                <div class="flex flex-row gap-2 flex-1 min-h-0 mb-2">
+                    <!-- IZQUIERDA: Jugadores en el campo -->
+                    <div class="w-1/2 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden min-h-[200px]">
+                        <div class="bg-emerald-50 border-b border-emerald-100 px-2 sm:px-4 py-2 font-bold text-emerald-800 flex justify-between items-center shrink-0 text-sm">
+                            <span class="truncate"><i class="fa-solid fa-users mr-1"></i> <span class="hidden sm:inline">En el Campo</span></span>
+                            <span id="directo-count-campo" class="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs shrink-0">0</span>
+                        </div>
+                        <div id="directo-jugadores-list" class="flex-1 overflow-y-auto p-1.5 sm:p-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 content-start">
+                            <!-- Los jugadores que están en el campo aparecen aquí -->
+                        </div>
+                    </div>
+
+                    <!-- DERECHA: Acciones disponibles -->
+                    <div class="w-1/2 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden min-h-[200px]">
+                        <div class="bg-slate-50 border-b border-slate-200 px-2 sm:px-4 py-2 font-bold text-slate-700 shrink-0 flex justify-between items-center text-sm">
+                            <span class="truncate"><i class="fa-solid fa-bolt mr-1"></i> <span class="hidden sm:inline">Acción para</span> <span id="directo-jugador-sel-name" class="text-blue-600 font-bold truncate inline-block align-bottom max-w-[80px] sm:max-w-[150px]">Nadie</span></span>
+                            <button id="btn-unselect-jugador" class="text-xs text-slate-400 hover:text-slate-600 hidden"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="directo-acciones-list" class="flex-1 overflow-y-auto p-1.5 sm:p-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 content-start opacity-50 pointer-events-none transition-opacity">
+                            <!-- Botones de acciones -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTONES RIVAL -->
+                <div id="directo-acciones-rival-list" class="flex gap-2 sm:gap-3 shrink-0 mb-2 overflow-x-auto pb-1 hide-scrollbar">
+                    <!-- Botones rivales dinámicos -->
+                </div>
+
+                <!-- BOTTOM: Línea de tiempo / Efemérides -->
+                <div id="directo-timeline-container" class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-10 sm:h-12 relative z-10 transition-all group hover:h-48 sm:hover:h-64 overflow-hidden">
+                    <div class="bg-slate-50 border-b border-slate-200 px-4 h-10 sm:h-12 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
+                        <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
+                            <button id="btn-timeline-expand" class="text-slate-400 hover:text-slate-600 transition-colors text-sm" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
+                        </div>
+                    </div>
+                    <div id="directo-timeline" class="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1 sm:space-y-2">
+                        <!-- Lista de eventos (Goles, tarjetas, cambios...) -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL ROLES DIRECTO -->
+            <div id="modal-roles-directo" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden z-[100] flex items-center justify-center p-4 fade-in">
+                <div class="bg-white rounded-xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
+                    <div class="flex justify-between items-center bg-slate-50 border-b border-slate-100 px-4 py-3 shrink-0">
+                        <h3 class="font-bold text-slate-800"><i class="fa-solid fa-users pr-2 mt-1"></i> Selección de Módulos</h3>
+                        <button id="btn-close-modal-roles" class="text-slate-400 hover:text-slate-600 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-4 sm:p-6 overflow-y-auto max-h-[80vh]">
+                        <p class="text-sm text-slate-600 mb-4">Selecciona los módulos de eventos que vas a registrar. Los módulos bloqueados están siendo utilizados por otros usuarios en directo.</p>
+                        
+                        <div id="lista-roles-modulos" class="space-y-3">
+                            <!-- checkboxes dynamically rendered here -->
+                        </div>
+                    </div>
+                    <div class="p-4 sm:p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                        <button id="btn-save-roles" class="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors">Entrar al Partido</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VISTA 7: PIZARRA -->
+            <div id="view-pizarra" class="app-view hidden fade-in h-full flex flex-col w-full overflow-y-auto overflow-x-hidden pb-4">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 shrink-0 gap-3 w-full">
+                    <div>
+                        <h3 id="pizarra-titulo-campo" class="font-bold text-xl text-slate-800">Pizarra Táctica</h3>
+                        <p class="text-slate-500 text-sm">Prepara tus jugadas y tácticas paso a paso.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 w-full md:w-auto justify-start md:justify-end">
+                        <div class="flex gap-2 w-full sm:w-auto">
+                            <select id="pizarra-jugada-selector" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 w-1/2 sm:w-32 lg:w-40 truncate shrink-0">
+                                <option value="">-- Nueva --</option>
+                            </select>
+                            <input type="text" id="pizarra-jugada-nombre" placeholder="Nombre..." class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 w-1/2 sm:w-32 lg:w-40 min-w-0 shrink-0">
+                        </div>
+                        
+                        <div class="flex flex-wrap gap-2 shrink-0">
+                            <button id="btn-pizarra-save" class="require-editor px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium transition-colors border border-emerald-200 flex items-center justify-center flex-1 sm:flex-none shadow-sm" title="Guardar Jugada">
+                                <i class="fa-solid fa-floppy-disk"></i><span class="ml-1"> Guardar</span>
+                            </button>
+                            <button id="btn-pizarra-delete-jugada" class="require-editor px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center justify-center shadow-sm hidden" title="Eliminar Jugada">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Separator -->
+                        <div class="hidden md:block w-px h-6 bg-slate-300 mx-1 shrink-0"></div>
+                        
+                        <div class="flex gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 shrink-0">
+                            <select id="pizarra-formacion" class="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:ring-emerald-500 shrink-0 min-w-[120px]" title="Táctica Inicial">
+                                <!-- filled by JS -->
+                            </select>
+                            <button id="btn-pizarra-rotate" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Girar Campo 90º"><i class="fa-solid fa-rotate-right"></i></button>
+                            <button id="btn-pizarra-reset" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Reiniciar posiciones"><i class="fa-solid fa-rotate-left"></i></button>
+                            <button id="btn-pizarra-fullscreen" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-colors shrink-0" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 min-h-[300px] border-2 border-emerald-500 rounded-xl relative overflow-hidden bg-emerald-600 drop-zone shadow-inner p-2 sm:p-4" id="pizarra-campo-container">
+                    <div class="w-full h-full flex items-center justify-center relative">
+                        <div id="pizarra-campo" class="relative transition-all duration-300 shadow-2xl rounded" style="max-width: 100%; max-height: 100%; aspect-ratio: 68/105; width: auto; height: 100%;">
+                            <div id="pizarra-svg-wrapper" class="absolute inset-0 w-full h-full pointer-events-none opacity-40 flex items-center justify-center">
+                                <!-- SVG here. Make sure SVG scales with 100% width/height -->
+                            </div>
+                            <!-- Fichas (generadas dinámicamente) -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controles de Jugada (Pasos) -->
+                <div class="mt-4 bg-white border border-slate-200 rounded-xl p-3 shadow-sm flex items-center justify-between shrink-0 flex-wrap gap-3">
+                    <div class="flex items-center gap-2">
+                        <button id="pizarra-btn-play" class="w-10 h-10 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full flex items-center justify-center transition-colors shadow-sm" title="Reproducir Jugada"><i class="fa-solid fa-play ml-1"></i></button>
+                        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                        <button id="pizarra-btn-prev" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors"><i class="fa-solid fa-backward-step"></i></button>
+                        <span id="pizarra-step-display" class="font-mono font-bold text-slate-700 min-w-[3rem] text-center">Paso 1</span>
+                        <button id="pizarra-btn-next" class="w-8 h-8 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors"><i class="fa-solid fa-forward-step"></i></button>
+                        <button id="pizarra-btn-add" class="w-8 h-8 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-full flex items-center justify-center transition-colors ml-2" title="Guardar Posiciones como Nuevo Paso"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="pizarra-btn-del" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center hidden" title="Eliminar este paso"><i class="fa-solid fa-trash mr-1"></i> Eliminar Paso</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="view-configuracion" class="app-view hidden fade-in h-full overflow-y-auto">
+                <div class="px-6 py-8 sm:px-8 max-w-5xl mx-auto space-y-8 pb-16">
+                    <div>
+                        <h2 class="text-3xl font-black text-slate-800 tracking-tight">Configuración</h2>
+                        <p class="text-slate-500 mt-1">Ajustes globales de la aplicación</p>
+                    </div>
+
+                    <!-- User Login Settings -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm transition-all relative overflow-hidden">
+                        <div id="user-profile-container">
+                            <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-user-shield text-emerald-500 mr-2"></i> Perfil de Usuario</h3>
+                            
+                            <!-- Not logged in state -->
+                            <div id="auth-logged-out" class="space-y-4 pt-1">
+                                <p class="text-sm text-slate-500">Inicia sesión con Google para sincronizar tus datos y mantenerlos seguros en la nube. Sin iniciar sesión, usarás una cuenta anónima temporal si está permitida.</p>
+                                <button id="btn-login-google" class="bg-white text-slate-700 px-4 py-2 border border-slate-300 rounded-lg shadow-sm font-medium hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" alt="Google">
+                                    Continuar con Google
+                                </button>
+                            </div>
+
+                            <!-- Logged in state -->
+                            <div id="auth-logged-in" class="space-y-4 hidden flex flex-col sm:flex-row sm:items-center sm:justify-between py-2">
+                                <div class="flex items-center gap-4">
+                                    <img id="auth-user-photo" src="" class="w-12 h-12 rounded-full border border-slate-200 hidden" alt="Foto">
+                                    <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center border border-emerald-200 text-xl font-bold hidden" id="auth-user-avatar">?</div>
+                                    <div>
+                                        <p class="font-bold text-slate-800" id="auth-user-name">Usuario Conectado</p>
+                                        <p class="text-xs text-slate-500" id="auth-user-email">email@ejemplo.com</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="btn-logout" class="bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition-colors border border-red-200 text-sm">Cerrar Sesión</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Mi data migration container -->
+                            <div id="migration-container" class="mt-4 pt-4 border-t border-slate-100 hidden">
+                                <h4 class="text-sm font-bold text-slate-700 mb-2">Copias de Seguridad (Exportar / Importar)</h4>
+                                <p class="text-xs text-slate-500 mb-3 block">Descarga un archivo con todos tus equipos y datos para poder subirlos desde tu otro dominio.</p>
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <button id="btn-export-data" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 w-full sm:w-auto px-4 py-2 rounded-lg font-medium transition-colors border border-indigo-200 text-sm flex items-center justify-center gap-2">
+                                        <i class="fa-solid fa-download"></i>
+                                        Exportar
+                                    </button>
+                                    <label class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 w-full sm:w-auto px-4 py-2 rounded-lg font-medium transition-colors border border-emerald-200 text-sm flex items-center justify-center gap-2 cursor-pointer">
+                                        <i class="fa-solid fa-upload"></i>
+                                        Importar
+                                        <input type="file" id="input-import-data" class="hidden" accept=".json">
+                                    </label>
+                                </div>
+                                <p id="migration-status" class="text-xs text-indigo-600 mt-2 font-medium hidden"></p>
+                            </div>
+
+                            <!-- Loading state -->
+                            <div id="auth-loading" class="flex items-center gap-2 text-slate-400 py-4">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                <span class="text-sm font-medium">Verificando sesión...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Team Management Settings -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-shield-halved text-blue-500 mr-2"></i> Gestión de Equipos</h3>
+                        <p class="text-sm text-slate-500 mb-4">Administra tus equipos, crea nuevos o únete a uno existente usando un código de invitación.</p>
+                        
+                        <div class="flex flex-wrap gap-3">
+                            <button id="btn-open-modal-equipo" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-sm">
+                                <i class="fa-solid fa-plus mr-2"></i> Nuevo Equipo
+                            </button>
+                            <button id="btn-open-modal-unirse" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-sm">
+                                <i class="fa-solid fa-link mr-2 text-emerald-600"></i> Unirse con Código
+                            </button>
+                        </div>
+                        
+                        <div class="mt-6 pt-6 border-t border-slate-100">
+                            <h4 class="text-sm font-bold text-slate-700 mb-3">Opciones del Equipo Actual</h4>
+                            <div class="flex flex-wrap gap-3">
+                                <button id="btn-team-members" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-sm">
+                                    <i class="fa-solid fa-users mr-2 text-indigo-500"></i> Gestión de Colaboradores
+                                </button>
+                                <button id="btn-edit-equipo" class="require-admin bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-sm">
+                                    <i class="fa-solid fa-pen mr-2 text-slate-500"></i> Editar Equipo
+                                </button>
+                                <button id="btn-del-equipo" class="require-admin bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg font-medium transition-colors flex items-center shadow-sm text-sm">
+                                    <i class="fa-solid fa-trash mr-2"></i> Eliminar Equipo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Matches Settings -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-trophy text-slate-400 mr-2"></i> Partidos</h3>
+                        <p class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los nuevos partidos que crees. Cada partido individual mantendrá su propia configuración que podrá ser modificada de forma independiente.</p>
+                        
+                        <button id="btn-config-global-acciones" class="require-admin bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-lg font-medium transition-colors border border-emerald-200 flex items-center"><i class="fa-solid fa-bolt mr-2 w-5"></i> Configurar Acciones por Defecto</button>
+                        <p class="text-xs text-amber-600 mt-2 font-medium hidden" id="config-admin-warning">Solo el administrador del equipo puede modificar la configuración global.</p>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- MODALES -->
+    <div id="modal-config-acciones" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in z-[60]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Configurar Acciones</h3>
+                <button id="btn-close-modal-acciones" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="text-sm text-slate-500 mb-4">Configura las acciones que estarán disponibles en este partido. Las acciones marcadas con [S] realizan una sustitución de jugador.</div>
+                
+                <div class="flex gap-2 mb-4 border-b border-slate-200">
+                     <button id="tab-match-propias" class="px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800">Propias</button>
+                     <button id="tab-match-rival" class="px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700">Rival</button>
+                </div>
+
+                <div id="list-acciones-config" class="space-y-2 mb-4">
+                   <!-- acciones list renderizadas aqui -->
+                </div>
+                
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-sm mb-3" id="title-form-accion">Nueva Acción</h4>
+                    <input type="hidden" id="input-accion-id" value="">
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <input type="text" id="input-accion-nombre" placeholder="Nombre" class="px-3 py-2 border rounded-lg text-sm w-full">
+                        <select id="input-accion-icon" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="fa-bolt">Rayo (fa-bolt)</option>
+                            <option value="fa-futbol">Balón (fa-futbol)</option>
+                            <option value="fa-square">Tarjeta (fa-square)</option>
+                            <option value="fa-crown">Corona (fa-crown)</option>
+                            <option value="fa-handshake">Apretón de manos (fa-handshake)</option>
+                            <option value="fa-bullseye">Diana (fa-bullseye)</option>
+                            <option value="fa-xmark">Cruz (fa-xmark)</option>
+                            <option value="fa-magnet">Imán (fa-magnet)</option>
+                            <option value="fa-arrow-right-from-bracket">Salir (fa-arrow-right-from-bracket)</option>
+                            <option value="fa-hand">Mano (fa-hand)</option>
+                            <option value="fa-ban">Prohibido (fa-ban)</option>
+                            <option value="fa-flag">Bandera (fa-flag)</option>
+                            <option value="fa-triangle-exclamation">Alerta (fa-triangle-exclamation)</option>
+                            <option value="fa-arrows-rotate">Cambio (fa-arrows-rotate)</option>
+                            <option value="fa-truck-medical">Ambulancia (fa-truck-medical)</option>
+                            <option value="fa-check">Check (fa-check)</option>
+                            <option value="fa-star">Estrella (fa-star)</option>
+                            <option value="fa-shield-halved">Escudo (fa-shield-halved)</option>
+                            <option value="fa-stopwatch">Cronómetro (fa-stopwatch)</option>
+                            <option value="fa-shoe-prints">Pisadas (fa-shoe-prints)</option>
+                            <option value="fa-shirt">Camiseta (fa-shirt)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <select id="input-accion-color" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="text-slate-500" class="text-slate-500 font-bold">Gris</option>
+                            <option value="text-blue-500" class="text-blue-500 font-bold">Azul</option>
+                            <option value="text-emerald-500" class="text-emerald-500 font-bold">Verde</option>
+                            <option value="text-red-500" class="text-red-500 font-bold">Rojo</option>
+                            <option value="text-amber-500" class="text-amber-500 font-bold">Naranja</option>
+                            <option value="text-purple-500" class="text-purple-500 font-bold">Morado</option>
+                            <option value="text-pink-500" class="text-pink-500 font-bold">Rosa</option>
+                            <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
+                        </select>
+                        <input type="number" step="0.01" min="-5" max="5" id="input-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
+                    </div>
+                    <div class="mb-3">
+                        <select id="input-accion-modulo" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="General">Módulo: General</option>
+                            <option value="Ataque">Módulo: Ataque</option>
+                            <option value="Defensa">Módulo: Defensa</option>
+                            <option value="Construcción">Módulo: Construcción</option>
+                            <option value="Portería">Módulo: Portería</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <input type="checkbox" id="input-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
+                        <label for="input-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-accion" class="w-1/3 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 hidden">Cancelar</button>
+                        <button id="btn-save-accion" class="flex-1 bg-slate-800 text-white py-2 rounded-lg text-sm font-medium hover:bg-slate-700">Añadir Acción</button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end">
+                <button id="btn-done-modal-acciones" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium">Hecho</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIG GLOBAL ACCIONES -->
+    <div id="modal-config-global-acciones" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in z-[60]">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Configuración Global de Acciones</h3>
+                <button id="btn-close-modal-global-acciones" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los NUEVOS partidos.</div>
+                
+                <div class="flex gap-2 mb-4 border-b border-slate-200">
+                     <button id="tab-global-propias" class="px-4 py-2 border-b-2 border-slate-800 font-bold text-slate-800">Propias</button>
+                     <button id="tab-global-rival" class="px-4 py-2 border-b-2 border-transparent font-medium text-slate-500 hover:text-slate-700">Rival</button>
+                </div>
+
+                <div id="list-global-acciones-config" class="space-y-2 mb-4">
+                   <!-- acciones list renderizadas aqui -->
+                </div>
+                
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    <h4 class="font-bold text-sm mb-3" id="title-form-global-accion">Nueva Acción (Global)</h4>
+                    <input type="hidden" id="input-global-accion-id" value="">
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-2">
+                        <input type="text" id="input-global-accion-nombre" placeholder="Nombre" class="px-3 py-2 border rounded-lg text-sm w-full">
+                        <select id="input-global-accion-icon" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="fa-bolt">Rayo (fa-bolt)</option>
+                            <option value="fa-futbol">Balón (fa-futbol)</option>
+                            <option value="fa-square">Tarjeta (fa-square)</option>
+                            <option value="fa-crown">Corona (fa-crown)</option>
+                            <option value="fa-handshake">Apretón de manos (fa-handshake)</option>
+                            <option value="fa-bullseye">Diana (fa-bullseye)</option>
+                            <option value="fa-xmark">Cruz (fa-xmark)</option>
+                            <option value="fa-magnet">Imán (fa-magnet)</option>
+                            <option value="fa-arrow-right-from-bracket">Salir (fa-arrow-right-from-bracket)</option>
+                            <option value="fa-hand">Mano (fa-hand)</option>
+                            <option value="fa-ban">Prohibido (fa-ban)</option>
+                            <option value="fa-flag">Bandera (fa-flag)</option>
+                            <option value="fa-triangle-exclamation">Alerta (fa-triangle-exclamation)</option>
+                            <option value="fa-arrows-rotate">Cambio (fa-arrows-rotate)</option>
+                            <option value="fa-truck-medical">Ambulancia (fa-truck-medical)</option>
+                            <option value="fa-check">Check (fa-check)</option>
+                            <option value="fa-star">Estrella (fa-star)</option>
+                            <option value="fa-shield-halved">Escudo (fa-shield-halved)</option>
+                            <option value="fa-stopwatch">Cronómetro (fa-stopwatch)</option>
+                            <option value="fa-shoe-prints">Pisadas (fa-shoe-prints)</option>
+                            <option value="fa-shirt">Camiseta (fa-shirt)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <select id="input-global-accion-color" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="text-slate-500" class="text-slate-500 font-bold">Gris</option>
+                            <option value="text-blue-500" class="text-blue-500 font-bold">Azul</option>
+                            <option value="text-emerald-500" class="text-emerald-500 font-bold">Verde</option>
+                            <option value="text-red-500" class="text-red-500 font-bold">Rojo</option>
+                            <option value="text-amber-500" class="text-amber-500 font-bold">Naranja</option>
+                            <option value="text-purple-500" class="text-purple-500 font-bold">Morado</option>
+                            <option value="text-pink-500" class="text-pink-500 font-bold">Rosa</option>
+                            <option value="text-yellow-400" class="text-yellow-400 font-bold">Amarillo</option>
+                        </select>
+                        <input type="number" step="0.01" min="-5" max="5" id="input-global-accion-score" placeholder="Puntuación (ej: 1, -0.5)" class="px-3 py-2 border rounded-lg text-sm w-full" title="Suma o resta en la valoración">
+                    </div>
+                    <div class="mb-3">
+                        <select id="input-global-accion-modulo" class="px-3 py-2 border rounded-lg text-sm w-full">
+                            <option value="General">Módulo: General</option>
+                            <option value="Ataque">Módulo: Ataque</option>
+                            <option value="Defensa">Módulo: Defensa</option>
+                            <option value="Construcción">Módulo: Construcción</option>
+                            <option value="Portería">Módulo: Portería</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2 mb-3">
+                        <input type="checkbox" id="input-global-accion-isChange" class="w-4 h-4 rounded border-slate-300 text-slate-800 focus:ring-slate-800">
+                        <label for="input-global-accion-isChange" class="text-sm text-slate-700">Cambio de Jugador</label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-cancel-global-accion" class="w-1/3 bg-slate-200 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 hidden">Cancelar</button>
+                        <button id="btn-save-global-accion" class="flex-1 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">Añadir Acción Global</button>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end">
+                <button id="btn-done-modal-global-acciones" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer">Hecho</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES -->
+    <div id="modal-partido" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Nuevo Partido</h3><button id="btn-close-modal-partido" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-partido" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Rival</label>
+                                <input type="text" id="input-partido-rival" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="Nombre del Rival">
+                            </div>
+                            <div class="flex items-center mt-2">
+                                <input type="checkbox" id="input-partido-local" class="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-amber-500" checked>
+                                <label for="input-partido-local" class="ml-2 block text-sm font-medium text-slate-700">
+                                    Jugamos de Local
+                                </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Escudo del Rival (opcional)</label>
+                                <input type="url" id="input-partido-escudo-rival" class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="URL del Escudo del Rival">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold mb-1">Fecha</label>
+                                    <input type="date" id="input-partido-fecha" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold mb-1">Hora</label>
+                                    <input type="time" id="input-partido-hora" required class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Lugar</label>
+                                <input type="text" id="input-partido-lugar" class="w-full px-3 py-2 border rounded-lg focus:ring-amber-500" placeholder="Ej. Campo Municipal">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold mb-1">Comentarios</label>
+                                <textarea id="input-partido-comentarios" class="w-full px-3 py-2 border rounded-lg resize-none focus:ring-amber-500" rows="2" placeholder="Competición, incidencias..."></textarea>
+                            </div>
+                        </div>
+                        <div class="space-y-2 flex flex-col max-h-[500px]">
+                            <label class="block text-sm font-bold mb-1">Convocatoria y Titulares</label>
+                            <div class="text-xs text-slate-500 mb-2 flex justify-between px-2 pr-4 font-bold border-b pb-1">
+                                <span>Jugador</span>
+                                <div class="flex gap-4 min-w-max">
+                                    <span class="w-8 text-center" title="Convocado">Conv</span>
+                                    <span class="w-8 text-center" title="Titular">Tit</span>
+                                </div>
+                            </div>
+                            <div id="partido-jugadores-list" class="space-y-1 overflow-y-auto pr-2 flex-1"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-partido" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button><button id="btn-save-modal-partido" class="px-4 py-2 bg-amber-600 text-white rounded-lg">Guardar Partido</button></div>
+        </div>
+    </div>
+
+    <!-- MODALES ESTADISTICAS -->
+    <div id="modal-estadisticas" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
+                <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-chart-line mr-2"></i> Estadísticas del Partido</h3>
+                <button id="btn-close-modal-estadisticas" class="text-blue-400 hover:text-blue-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-6" id="stats-content-to-export">
+                <!-- Info Partido (visible only in PDF or populated always) -->
+                <div id="stats-match-info" class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-center gap-6 mb-2">
+                    <!-- Loaded dynamically -->
+                </div>
+
+                <!-- Resumen Superior -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="stats-global-container">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="stats-export-grid">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 break-inside-avoid">
+                        <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Rendimiento por Jugador</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 whitespace-nowrap">
+                                    <tr>
+                                        <th class="px-3 py-2 rounded-tl-lg">Jugador</th>
+                                        <th class="px-3 py-2 text-center text-blue-500" title="Minutos jugados"><i class="fa-regular fa-clock"></i></th>
+                                        <th class="px-3 py-2 text-center text-emerald-400" title="Tiros a puerta"><i class="fa-solid fa-bullseye"></i></th>
+                                        <th class="px-3 py-2 text-center text-slate-400" title="Tiros fuera"><i class="fa-solid fa-xmark"></i></th>
+                                        <th class="px-3 py-2 text-center text-emerald-500" title="Goles"><i class="fa-solid fa-futbol"></i></th>
+                                        <th class="px-3 py-2 text-center text-amber-500" title="Asistencias"><i class="fa-solid fa-handshake"></i></th>
+                                        <th class="px-3 py-2 text-center text-indigo-500 rounded-tr-lg" title="Valoración"><i class="fa-solid fa-star"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="stats-players-list" class="divide-y divide-slate-100 whitespace-nowrap">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col gap-6">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hidden break-inside-avoid" id="stats-chart-wrapper">
+                            <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Distribución de Acciones</h4>
+                            <div class="w-full h-64 flex items-center justify-center">
+                                <canvas id="stats-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hidden break-inside-avoid" id="stats-temporal-chart-wrapper">
+                            <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Evolución de Acciones</h4>
+                            <div class="w-full h-64 flex items-center justify-center">
+                                <canvas id="stats-temporal-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full break-inside-avoid" id="stats-timeline-panel">
+                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Timeline del Partido</h4>
+                    <div class="overflow-y-auto max-h-[400px] flex-1 pr-2 pl-4 py-2" id="stats-timeline-scroll">
+                        <div class="relative space-y-4 border-l-2 border-slate-200 py-2" id="stats-timeline-container">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex flex-wrap justify-end gap-3">
+                <button id="btn-export-pdf" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir PDF</button>
+                <button id="btn-share-modal-estadisticas" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir Texto</button>
+                <button id="btn-done-modal-estadisticas" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors">Volver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES -->
+    <div id="modal-ejercicio" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Nuevo Ejercicio</h3><button id="btn-close-modal" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-ejercicio" class="space-y-4">
+                    <div class="flex flex-col md:flex-row gap-6">
+                        <!-- Campos del formulario -->
+                        <div class="w-full md:w-1/3 space-y-4">
+                            <!-- Línea 1: Título -->
+                            <input type="text" id="input-nombre" required class="w-full px-3 py-2 border rounded-lg focus:ring-emerald-500" placeholder="Nombre (ej. Rondo 4v2)">
+                            
+                            <!-- Línea 2: Tipo, Modalidad y Campo -->
+                            <div class="grid grid-cols-3 gap-2">
+                                <select id="input-categoria" class="w-full px-1 py-2 border rounded-lg focus:ring-emerald-500 text-sm text-left">
+                                    <option value="Táctico">Táctico</option>
+                                    <option value="Físico">Físico</option>
+                                    <option value="Técnico">Técnico</option>
+                                    <option value="Estrategia">Estrategia</option>
+                                    <option value="Calentamiento">Calent</option>
+                                    <option value="Global">Global</option>
+                                </select>
+                                <select id="input-modalidad" class="w-full px-1 py-2 border rounded-lg focus:ring-emerald-500 text-sm text-left">
+                                    <option value="Ambos">F11 / F7</option>
+                                    <option value="Fútbol 11">Fútbol 11</option>
+                                    <option value="Fútbol 7">Fútbol 7</option>
+                                </select>
+                                <select id="pizarra-fondo" class="w-full px-1 py-2 border rounded-lg text-slate-700 bg-white focus:ring-emerald-500 text-sm text-left">
+                                    <option value="completo">Completo F11</option>
+                                    <option value="completo-f7">Completo F7</option>
+                                    <option value="medio">Medio</option>
+                                    <option value="area">Área</option>
+                                    <option value="cuadrado">Cuadrado</option>
+                                    <option value="cuadricula2">Cuadrícula 2x2</option>
+                                    <option value="cuadricula3">Cuadrícula 3x3</option>
+                                </select>
+                            </div>
+
+                            <!-- Línea 3: Tiempos y Reps -->
+                            <div class="grid grid-cols-4 gap-x-2 gap-y-3">
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">T./Rep (m)</label>
+                                    <input type="number" id="input-tiempo-rep" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 5" min="0">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Reps</label>
+                                    <input type="number" id="input-reps" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 3" min="1" value="1">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Desc. (m)</label>
+                                    <input type="number" id="input-descanso" class="w-full px-2 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Ej. 1" min="0" value="0">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-semibold text-emerald-600 uppercase tracking-wide mb-1">Total (m)</label>
+                                    <input type="number" id="input-duracion" required readonly class="w-full px-2 py-2 border border-emerald-100 bg-emerald-50 rounded-lg font-bold text-emerald-700 text-sm focus:outline-none" placeholder="0">
+                                </div>
+                            </div>
+                            
+                            <!-- Línea 4: Intensidad y Jugadores -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <select id="input-intensidad" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500">
+                                        <option value="" disabled selected hidden>Intensidad...</option>
+                                        <option value="Baja">Baja</option>
+                                        <option value="Media">Media</option>
+                                        <option value="Alta">Alta</option>
+                                        <option value="Máxima">Máxima</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input type="text" id="input-jugadores" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Nº Jug: ej. 10 o 4v4+2">
+                                </div>
+                            </div>
+
+                            <!-- Línea 5: Material -->
+                            <input type="text" id="input-material" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-emerald-500" placeholder="Material: Conos, petos, balones...">
+
+                            <!-- Línea 6: Descripción -->
+                            <textarea id="input-descripcion" rows="4" required class="w-full px-3 py-2 border rounded-lg focus:ring-emerald-500 text-sm" placeholder="Descripción de la tarea, reglas, puntuación..."></textarea>
+                        </div>
+                        
+                            <!-- Pizarra Táctica -->
+                        <div class="w-full md:w-2/3 flex flex-col h-full">
+                            
+                            <!-- Barra de Herramientas -->
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                                <div class="flex flex-wrap items-center gap-1 md:gap-2">
+                                    <select id="tool-color" class="p-1 md:p-1.5 text-xs md:text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 max-w-[80px] md:max-w-none">
+                                        <option value="#dc2626">Rojo</option>
+                                        <option value="#2563eb">Azul</option>
+                                        <option value="#eab308">Amarillo</option>
+                                        <option value="#1e293b">Negro</option>
+                                        <option value="#16a34a">Verde</option>
+                                        <option value="#9333ea">Morado</option>
+                                    </select>
+                                    <button type="button" id="tool-player" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md flex items-center justify-center border transition-colors" title="Añadir Jugador"><i class="fa-solid fa-user"></i></button>
+                                    <button type="button" id="tool-portero" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-700 rounded-md flex items-center justify-center border transition-colors" title="Añadir Portero"><i class="fa-solid fa-user-shield"></i></button>
+                                    
+                                    <button type="button" id="tool-balon" class="p-1.5 md:p-2 bg-white hover:bg-slate-100 text-slate-800 rounded-md flex items-center justify-center border transition-colors" title="Añadir Balón">⚽</button>
+                                    <button type="button" id="tool-cono" class="p-1.5 md:p-2 bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-md flex items-center justify-center transition-colors" title="Añadir Cono"><i class="fa-solid fa-triangle-exclamation"></i></button>
+                                    
+                                    <div class="w-px h-6 bg-slate-300 mx-0.5"></div>
+
+                                    <div class="flex items-center gap-1 bg-white border rounded p-1 mx-0.5" title="Controles de animación">
+                                        <button type="button" id="step-prev" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+                                        <span id="step-display" class="w-8 text-center font-bold text-slate-800 text-xs md:text-sm" title="Paso actual / Total pasos">1/1</span>
+                                        <button type="button" id="step-next" class="w-5 h-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center transition-colors" title="Siguiente paso"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                                        <button type="button" id="step-delete" class="w-5 h-5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded flex items-center justify-center transition-colors hidden" title="Eliminar este paso"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
+                                    </div>
+                                    
+                                    <div class="w-px h-6 bg-slate-300 mx-0.5 hidden md:block"></div>
+                                    
+                                    <button type="button" id="tool-undo" class="p-1.5 md:p-2 bg-white hover:bg-slate-50 text-slate-600 border rounded-md transition-colors" title="Deshacer (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
+                                    <button type="button" id="tool-borrar" class="p-1.5 md:p-2 bg-white hover:bg-rose-50 text-rose-600 border rounded-md transition-colors" title="Borrar Seleccionado"><i class="fa-solid fa-eraser"></i></button>
+                                    <button type="button" id="tool-limpiar" class="p-1.5 md:p-2 bg-white hover:bg-slate-50 text-slate-600 border rounded-md transition-colors" title="Limpiar Pizarra"><i class="fa-solid fa-trash-can"></i></button>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <button type="button" id="tool-play" class="px-3 py-1.5 md:py-2 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm transition-colors font-bold text-sm flex items-center" title="Reproducir Animación">
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Lienzo -->
+                            <div id="pizarra-container-wrapper" class="bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center shadow-sm w-full relative overflow-hidden flex-1 group min-h-[350px] md:min-h-[400px]">
+                                <div id="pizarra-container" class="bg-emerald-500 relative flex-shrink-0 origin-center" style="width: 600px; height: 350px;">
+                                    <canvas id="pizarra-canvas" width="600" height="350"></canvas>
+                                </div>
+                                <div class="absolute bottom-2 right-2 flex gap-2 z-10">
+                                    <button type="button" id="tool-play-fullscreen" class="hidden px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors font-bold text-sm items-center" title="Reproducir Animación">
+                                        <i class="fa-solid fa-play"></i>
+                                    </button>
+                                    <button type="button" id="tool-fullscreen" class="p-2 aspect-square bg-slate-800/80 hover:bg-slate-900 text-white rounded-lg shadow-lg backdrop-blur-sm transition-colors flex items-center justify-center" title="Pantalla Completa">
+                                        <i class="fa-solid fa-expand"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal" class="px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
+                <button id="btn-save-modal" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm font-medium">Guardar Ejercicio</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-equipo" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Añadir Equipo</h3>
+                <button id="btn-close-modal-equipo" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-equipo" class="space-y-4">
+                    <input type="text" id="input-equipo-nombre" required class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="Nombre del Equipo (ej. Alevín A)">
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <select id="input-equipo-modalidad" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500">
+                            <option value="Fútbol 11">Fútbol 11</option>
+                            <option value="Fútbol 7">Fútbol 7</option>
+                        </select>
+                        <input type="text" id="input-equipo-temporada" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="Temporada (ej. 24/25)">
+                    </div>
+                    <input type="url" id="input-equipo-escudo" class="w-full px-3 py-2 border rounded-lg focus:ring-blue-500" placeholder="URL del Escudo (opcional)">
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal-equipo" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button id="btn-save-modal-equipo" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL UNIRSE A EQUIPO -->
+    <div id="modal-unirse-equipo" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-lg text-slate-800">Unirse a Equipo</h3>
+                <button id="btn-close-modal-unirse" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-slate-500 mb-4">Introduce el código de invitación proporcionado por el administrador del equipo.</p>
+                <input type="text" id="input-codigo-invitacion" class="w-full px-4 py-3 border border-slate-300 rounded-lg font-mono text-center text-xl uppercase tracking-widest focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" placeholder="XXXXXX" maxlength="6">
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 flex justify-end space-x-3 bg-slate-50">
+                <button id="btn-cancel-modal-unirse" class="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">Cancelar</button>
+                <button id="btn-save-modal-unirse" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium shadow-sm transition-colors">Unirse</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL GESTIÓN MIEMBROS -->
+    <div id="modal-miembros-equipo" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-lg text-slate-800"><i class="fa-solid fa-users mr-2 text-slate-400"></i> Miembros del Equipo</h3>
+                <button id="btn-close-modal-miembros" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            
+            <!-- Generar Invitación -->
+            <div class="p-6 border-b border-slate-100 bg-white">
+                <h4 class="text-sm font-bold text-slate-700 mb-3 uppercase tracking-wider">Invitar Colaborador</h4>
+                <div class="flex gap-2">
+                    <select id="select-rol-invitacion" class="w-1/3 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-blue-500">
+                        <option value="editor">Editor</option>
+                        <option value="viewer">Observador</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                    <button id="btn-generar-invitacion" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded-lg font-medium text-sm transition-colors">
+                        <i class="fa-solid fa-ticket mr-1"></i> Generar Código
+                    </button>
+                </div>
+                <div id="container-codigo-generado" class="mt-4 hidden p-4 bg-slate-800 rounded-lg flex items-center justify-between">
+                    <div>
+                        <p class="text-xs text-slate-400 font-medium mb-1">Código de invitación (un solo uso):</p>
+                        <p id="display-codigo-generado" class="text-2xl text-white font-mono tracking-widest font-bold">---</p>
+                    </div>
+                    <button id="btn-copy-codigo" class="w-10 h-10 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center justify-center transition-colors" title="Copiar"><i class="fa-regular fa-copy"></i></button>
+                </div>
+            </div>
+            
+            <!-- Lista Miembros -->
+            <div class="p-0 overflow-y-auto flex-1 bg-slate-50">
+                <div class="px-6 py-3 border-b border-slate-100 bg-white sticky top-0">
+                    <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Miembros Actuales</h4>
+                </div>
+                <ul id="lista-miembros" class="divide-y divide-slate-100">
+                    <!-- Dynamic -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-jugador" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Añadir Jugador</h3><button id="btn-close-modal-jugador" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-jugador" class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border shrink-0">
+                            <img id="preview-jugador-foto" src="" class="w-full h-full object-cover hidden">
+                            <i id="icon-jugador-foto" class="fa-solid fa-camera text-slate-400 text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Foto del Jugador (Opcional)</label>
+                            <input type="file" id="input-jugador-foto" accept="image/*" class="w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                            <input type="hidden" id="input-jugador-foto-base64" value="">
+                        </div>
+                    </div>
+                    <input type="text" id="input-jugador-nombre" required class="w-full px-3 py-2 border rounded-lg" placeholder="Nombre">
+                    <select id="input-jugador-posicion" class="w-full px-3 py-2 border rounded-lg"><option value="Portero">Portero</option><option value="Central">Central</option><option value="Lateral">Lateral</option><option value="Mediocentro">Mediocentro</option><option value="Volante">Volante</option><option value="Delantero">Delantero</option></select>
+                    <div class="flex gap-4">
+                        <input type="number" id="input-jugador-dorsal" required class="w-full px-3 py-2 border rounded-lg" placeholder="Dorsal">
+                        <select id="input-jugador-estado" class="w-full px-3 py-2 border rounded-lg"><option value="Disponible">Disponible</option><option value="Tocado">Tocado</option><option value="Lesionado">Lesionado</option></select>
+                    </div>
+                    
+                    <div class="pt-2 border-t border-slate-100">
+                        <h4 class="font-bold text-sm text-slate-700 mb-3"><i class="fa-solid fa-chart-simple mr-2"></i> Estadísticas</h4>
+                        <div class="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                            <div class="col-span-4 sm:col-span-1"><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">Media</label><input type="number" id="input-jugador-media" value="50" min="1" max="99" class="w-full px-2 py-1 text-center font-bold border rounded bg-amber-50 text-amber-700 text-lg"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PAC</label><input type="number" id="input-jugador-ritmo" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">SHO</label><input type="number" id="input-jugador-tiro" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PAS</label><input type="number" id="input-jugador-pase" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">DRI</label><input type="number" id="input-jugador-regate" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">DEF</label><input type="number" id="input-jugador-defensa" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase block text-center">PHY</label><input type="number" id="input-jugador-fisico" value="50" min="1" max="99" class="w-full px-1 py-1 text-center font-bold border rounded text-sm"></div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-jugador" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-jugador" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Guardar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-sesion" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Planificar Sesión</h3><button id="btn-close-modal-sesion" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="form-sesion" class="space-y-6">
+                    <input type="date" id="input-sesion-fecha" required class="w-full px-3 py-2 border rounded-lg">
+                    <input type="text" id="input-sesion-objetivo" required class="w-full px-3 py-2 border rounded-lg" placeholder="Objetivo">
+                    <div><label class="block mb-2 text-sm font-bold">Ejercicios</label><div id="sesion-ejercicios-list" class="grid grid-cols-2 gap-2 p-3 border rounded-lg bg-slate-50"></div></div>
+                    <div><label class="block mb-2 text-sm font-bold">Asistencia</label><div id="sesion-jugadores-list" class="grid grid-cols-3 gap-2 p-3 border rounded-lg bg-slate-50"></div></div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3"><button id="btn-cancel-modal-sesion" class="px-4 py-2">Cancelar</button><button id="btn-save-modal-sesion" class="px-4 py-2 bg-purple-600 text-white rounded-lg">Guardar</button></div>
+        </div>
+    </div>
+
+    <div id="modal-sustitucion" class="fixed inset-0 bg-slate-900 bg-opacity-70 z-50 hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-blue-50">
+                <h3 class="font-bold text-lg text-blue-800"><i class="fa-solid fa-arrows-rotate mr-2"></i> Sustitución</h3>
+                <button id="btn-close-modal-sustitucion" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <span class="text-sm font-bold text-slate-500 block mb-1">Sale del campo:</span>
+                <div class="font-bold text-lg text-slate-800" id="sustitucion-jugador-sale">Nadie</div>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <label class="block text-sm font-bold mb-3 text-slate-700">Selecciona quién entra (Banquillo):</label>
+                <div id="sustitucion-banquillo-list" class="space-y-2">
+                    <!-- Jugadores en banquillo -->
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end space-x-3">
+                <button id="btn-cancel-modal-sustitucion" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button id="btn-save-modal-sustitucion" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">Hacer Cambio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EL NUEVO MOTOR DE TU APP -->
+    <script type="module" src="./js/main.js"></script>
+</body>
+</html>
