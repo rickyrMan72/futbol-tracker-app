@@ -188,7 +188,7 @@ function renderListaMiembros(equipo) {
     // Añadir eventos a los botones de expulsar
     const btnsRemove = ul.querySelectorAll('.btn-remove-member');
     btnsRemove.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             const myRole = getRolActual();
             if (myRole !== 'admin' && myRole !== 'superadmin') {
                 alert("Solo los administradores pueden expulsar miembros.");
@@ -196,7 +196,7 @@ function renderListaMiembros(equipo) {
             }
 
             const targetUid = e.currentTarget.getAttribute('data-uid');
-            confirmarAccion("¿Seguro que quieres expulsar a este usuario?", async () => {
+            if (await confirmarAccion("¿Seguro que quieres expulsar a este usuario?")) {
                 try {
                     const equipoRef = doc(db, 'equipos', equipo.id);
                     
@@ -218,7 +218,7 @@ function renderListaMiembros(equipo) {
                     console.error("Error al expulsar", err);
                     alert("Error al expulsar al miembro.");
                 }
-            });
+            }
         });
     });
 }
