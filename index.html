@@ -19,6 +19,16 @@
         body.role-viewer .require-admin { display: none !important; }
         body.role-editor .require-admin { display: none !important; }
         body:not(.role-superadmin) .require-superadmin { display: none !important; }
+        
+        /* Show warnings when tools are hidden */
+        body.role-viewer #config-admin-warning, body.role-editor #config-admin-warning { display: block !important; }
+        /* Disable interaction on lists for viewers */
+        body.role-viewer #directo-jugadores-list { pointer-events: none; }
+        body.role-viewer #directo-acciones-list { pointer-events: none; }
+        body.role-viewer #directo-acciones-rival-list { display: none !important; }
+        body.role-viewer #pizarra-campo-container { pointer-events: none; }
+        body.role-viewer #pizarra-formacion { pointer-events: none; opacity: 0.5; }
+        body.role-viewer #btn-pizarra-reset { display: none !important; }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800 flex h-screen overflow-hidden">
@@ -163,7 +173,7 @@
                     <button id="btn-back-partidos" class="text-slate-500 hover:text-slate-800 transition-colors"><i class="fa-solid fa-arrow-left mr-2"></i> Volver</button>
                     <h3 id="directo-titulo-partido" class="font-bold text-base sm:text-lg text-slate-800 truncate px-2">Cargando...</h3>
                     <div class="flex items-center gap-2 sm:gap-3 shrink-0">
-                        <button id="btn-config-acciones" class="text-slate-500 hover:text-slate-800 transition-colors px-1" title="Configurar Acciones"><i class="fa-solid fa-gear text-lg"></i></button>
+                        <button id="btn-config-acciones" class="require-editor text-slate-500 hover:text-slate-800 transition-colors px-1" title="Configurar Acciones"><i class="fa-solid fa-gear text-lg"></i></button>
                     </div>
                 </div>
 
@@ -183,7 +193,7 @@
                         </div>
                     </div>
 
-                    <div class="flex gap-2 items-center">
+                    <div class="flex gap-2 items-center require-editor">
                         <button id="btn-crono-start" class="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 hover:bg-emerald-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg" title="Iniciar/Reanudar"><i class="fa-solid fa-play ml-1"></i></button>
                         <button id="btn-crono-pause" class="w-10 h-10 sm:w-12 sm:h-12 bg-amber-500 hover:bg-amber-600 rounded-full flex items-center justify-center text-lg sm:text-xl transition-colors shadow-lg hidden" title="Pausar"><i class="fa-solid fa-pause"></i></button>
                         <button id="btn-crono-next" class="px-3 sm:px-4 h-10 sm:h-12 bg-blue-600 hover:bg-blue-700 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-colors shadow-lg ml-1 sm:ml-2" title="Fin del periodo / Siguiente"><span class="hidden sm:inline">2ª Parte</span> <i class="fa-solid fa-forward-step sm:ml-2"></i></button>
@@ -271,10 +281,10 @@
                         </div>
                         
                         <div class="flex flex-wrap gap-2 shrink-0">
-                            <button id="btn-pizarra-save" class="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium transition-colors border border-emerald-200 flex items-center justify-center flex-1 sm:flex-none shadow-sm" title="Guardar Jugada">
+                            <button id="btn-pizarra-save" class="require-editor px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-sm font-medium transition-colors border border-emerald-200 flex items-center justify-center flex-1 sm:flex-none shadow-sm" title="Guardar Jugada">
                                 <i class="fa-solid fa-floppy-disk"></i><span class="ml-1"> Guardar</span>
                             </button>
-                            <button id="btn-pizarra-delete-jugada" class="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center justify-center shadow-sm hidden" title="Eliminar Jugada">
+                            <button id="btn-pizarra-delete-jugada" class="require-editor px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center justify-center shadow-sm hidden" title="Eliminar Jugada">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         </div>
@@ -386,7 +396,9 @@
                     <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
                         <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center"><i class="fa-solid fa-trophy text-slate-400 mr-2"></i> Partidos</h3>
                         <p class="text-sm text-slate-500 mb-4">Configura las acciones predeterminadas que se aplicarán a todos los nuevos partidos que crees. Cada partido individual mantendrá su propia configuración que podrá ser modificada de forma independiente.</p>
-                        <button id="btn-config-global-acciones" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-lg font-medium transition-colors border border-emerald-200 flex items-center"><i class="fa-solid fa-bolt mr-2 w-5"></i> Configurar Acciones por Defecto</button>
+                        
+                        <button id="btn-config-global-acciones" class="require-admin bg-emerald-50 hover:bg-emerald-100 text-emerald-600 px-4 py-2 rounded-lg font-medium transition-colors border border-emerald-200 flex items-center"><i class="fa-solid fa-bolt mr-2 w-5"></i> Configurar Acciones por Defecto</button>
+                        <p class="text-xs text-amber-600 mt-2 font-medium hidden" id="config-admin-warning">Solo el administrador del equipo puede modificar la configuración global.</p>
                     </div>
                 </div>
             </div>
