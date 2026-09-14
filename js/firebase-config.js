@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -14,4 +14,4 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export { signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithPopup, onAuthStateChanged, signOut, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer, getDoc }
+export { signInAnonymously, GoogleAuthProvider, signInWithPopup, linkWithPopup, onAuthStateChanged, signOut, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, setDoc, arrayRemove, arrayUnion, query, where, getDocFromServer, getDoc };
