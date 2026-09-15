@@ -6,6 +6,7 @@ export let equipoIdActivo = null;
 let unsubJugadores = null;
 
 const contenedor = document.getElementById('lista-jugadores-container');
+let viewMode = localStorage.getItem('plantillaViewMode') || 'cards';
 
 export function setEquipoActivo(id) {
     equipoIdActivo = id;
@@ -34,6 +35,36 @@ export function setEquipoActivo(id) {
 export function initJugadores() {
     if (!auth.currentUser) return;
 
+    const btnViewCards = document.getElementById('btn-view-cards');
+    const btnViewTable = document.getElementById('btn-view-table');
+
+    if (btnViewCards && btnViewTable) {
+        const updateViewButtons = () => {
+            if (viewMode === 'cards') {
+                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+                btnViewTable.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+            } else {
+                btnViewTable.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+            }
+        };
+
+        updateViewButtons();
+
+        btnViewCards.addEventListener('click', () => {
+            viewMode = 'cards';
+            localStorage.setItem('plantillaViewMode', 'cards');
+            updateViewButtons();
+            renderizar();
+        });
+
+        btnViewTable.addEventListener('click', () => {
+            viewMode = 'table';
+            localStorage.setItem('plantillaViewMode', 'table');
+            updateViewButtons();
+            renderizar();
+        });
+    }
 
     const closeModJug = bindModal('modal-jugador', 'btn-open-modal-jugador', 'btn-close-modal-jugador', 'btn-cancel-modal-jugador', () => {
         document.getElementById('form-jugador').reset();
@@ -155,51 +186,123 @@ function renderizar() {
 
     jugadoresEquipo.forEach(jug => {
         let color = jug.estado === 'Tocado' ? 'bg-amber-500' : (jug.estado === 'Lesionado' ? 'bg-red-500' : 'bg-emerald-500');
-        const card = document.createElement('div');
         const stats = jug.stats || { media: 50, ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 };
-        let flagUrl = ''; 
         
-        card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden';
-        card.innerHTML = `
-            <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
-            <div class="absolute top-2 right-2 flex gap-1 z-[20]">
-                <button class="require-editor btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
-                <button class="require-editor btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
-            </div>
+        if (viewMode === 'table') {
+            // Remove grid classes if present, though we might want to just set class list entirely
+            contenedor.className = 'w-full overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm';
             
-            <div class="w-full flex justify-between items-start mb-0 relative z-10 px-1">
-                <div class="flex flex-col items-center">
-                    <span class="text-2xl font-bold text-amber-950 leading-none">${stats.media}</span>
-                    <span class="text-[10px] font-bold text-amber-900 uppercase">${jug.posicion.substring(0, 3)}</span>
-                </div>
-                <div class="flex flex-col items-end gap-1 pt-1 opacity-80">
-                    <i class="fa-solid fa-futbol text-amber-900 text-sm drop-shadow-sm"></i>
-                    <div class="w-3 h-3 ${color} rounded-full border border-amber-900 shadow-sm" title="${jug.estado}"></div>
-                </div>
-            </div>
+            if (!contenedor.querySelector('table')) {
+                contenedor.innerHTML = `
+                    <table class="w-full text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-800">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold">Dorsal</th>
+                                <th class="px-4 py-3 font-semibold">Jugador</th>
+                                <th class="px-4 py-3 font-semibold">Posición</th>
+                                <th class="px-4 py-3 font-semibold text-center">Media</th>
+                                <th class="px-4 py-3 font-semibold">Estado</th>
+                                <th class="px-4 py-3 font-semibold text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-jugadores-body" class="divide-y divide-slate-100">
+                        </tbody>
+                    </table>
+                `;
+            }
 
-            <div class="w-20 h-20 bg-amber-100/50 rounded-full border-2 border-amber-600/30 flex items-center justify-center text-4xl text-amber-800 shadow-inner relative z-10 mb-1 overflow-hidden">
-                ${jug.foto ? `<img src="${jug.foto}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-user drop-shadow-sm"></i>`}
-            </div>
+            const tbody = contenedor.querySelector('#table-jugadores-body');
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition-colors group';
+            tr.innerHTML = `
+                <td class="px-4 py-3 font-medium text-slate-900 w-16">#${jug.dorsal}</td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center">
+                        <div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center mr-3 overflow-hidden shrink-0">
+                            ${jug.foto ? `<img src="${jug.foto}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-user text-slate-400 text-xs"></i>`}
+                        </div>
+                        <span class="font-bold text-slate-800">${jug.nombre}</span>
+                    </div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium border border-slate-200">${jug.posicion}</span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">${stats.media}</span>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center">
+                        <div class="w-2.5 h-2.5 ${color} rounded-full mr-2"></div>
+                        <span class="text-xs font-medium">${jug.estado}</span>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="require-editor btn-edit-jug w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button class="require-editor btn-del-jug w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
+                </td>
+            `;
+
+            bindCardEvents(tr, jug, stats);
+            tbody.appendChild(tr);
+
+        } else {
+            // Restore grid classes
+            contenedor.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6';
+
+            const card = document.createElement('div');
+            card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden';
+            card.innerHTML = `
+                <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
+                <div class="absolute top-2 right-2 flex gap-1 z-[20]">
+                    <button class="require-editor btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button class="require-editor btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
+                
+                <div class="w-full flex justify-between items-start mb-0 relative z-10 px-1">
+                    <div class="flex flex-col items-center">
+                        <span class="text-2xl font-bold text-amber-950 leading-none">${stats.media}</span>
+                        <span class="text-[10px] font-bold text-amber-900 uppercase">${jug.posicion.substring(0, 3)}</span>
+                    </div>
+                    <div class="flex flex-col items-end gap-1 pt-1 opacity-80">
+                        <i class="fa-solid fa-futbol text-amber-900 text-sm drop-shadow-sm"></i>
+                        <div class="w-3 h-3 ${color} rounded-full border border-amber-900 shadow-sm" title="${jug.estado}"></div>
+                    </div>
+                </div>
+
+                <div class="w-20 h-20 bg-amber-100/50 rounded-full border-2 border-amber-600/30 flex items-center justify-center text-4xl text-amber-800 shadow-inner relative z-10 mb-1 overflow-hidden">
+                    ${jug.foto ? `<img src="${jug.foto}" class="w-full h-full object-cover">` : `<i class="fa-solid fa-user drop-shadow-sm"></i>`}
+                </div>
+                
+                <div class="text-center w-full relative z-10">
+                    <h4 class="font-bold text-amber-950 text-sm uppercase tracking-wider truncate px-1 border-b border-amber-900/20 pb-1">${jug.nombre}</h4>
+                    <div class="text-[10px] text-amber-900 font-bold mb-1 opacity-70">#${jug.dorsal}</div>
+                </div>
+
+                <div class="w-full flex justify-center relative z-10 pb-1">
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-bold text-amber-950">
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.ritmo}</span><span class="text-amber-800 uppercase font-normal">PAC</span></div>
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.regate}</span><span class="text-amber-800 uppercase font-normal">DRI</span></div>
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.tiro}</span><span class="text-amber-800 uppercase font-normal">SHO</span></div>
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.defensa}</span><span class="text-amber-800 uppercase font-normal">DEF</span></div>
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.pase}</span><span class="text-amber-800 uppercase font-normal">PAS</span></div>
+                        <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.fisico}</span><span class="text-amber-800 uppercase font-normal">PHY</span></div>
+                    </div>
+                </div>
+            `;
             
-            <div class="text-center w-full relative z-10">
-                <h4 class="font-bold text-amber-950 text-sm uppercase tracking-wider truncate px-1 border-b border-amber-900/20 pb-1">${jug.nombre}</h4>
-                <div class="text-[10px] text-amber-900 font-bold mb-1 opacity-70">#${jug.dorsal}</div>
-            </div>
+            bindCardEvents(card, jug, stats);
+            contenedor.appendChild(card);
+        }
+    });
 
-            <div class="w-full flex justify-center relative z-10 pb-1">
-                <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-bold text-amber-950">
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.ritmo}</span><span class="text-amber-800 uppercase font-normal">PAC</span></div>
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.regate}</span><span class="text-amber-800 uppercase font-normal">DRI</span></div>
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.tiro}</span><span class="text-amber-800 uppercase font-normal">SHO</span></div>
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.defensa}</span><span class="text-amber-800 uppercase font-normal">DEF</span></div>
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.pase}</span><span class="text-amber-800 uppercase font-normal">PAS</span></div>
-                    <div class="flex items-center gap-1 justify-start"><span class="w-4 text-right">${stats.fisico}</span><span class="text-amber-800 uppercase font-normal">PHY</span></div>
-                </div>
-            </div>
-        `;
-        
-        card.querySelector('.btn-del-jug').addEventListener('click', async (e) => {
+    // Re-apply roles visibility if needed
+    document.dispatchEvent(new Event('rolesUpdated'));
+}
+
+function bindCardEvents(element, jug, stats) {
+    element.querySelector('.btn-del-jug').addEventListener('click', async (e) => {
             if (await confirmarAccion('¿Eliminar jugador de forma permanente?')) {
                 try {
                     await deleteDoc(doc(db, 'jugadores', jug.id));
@@ -210,7 +313,7 @@ function renderizar() {
             }
         });
 
-        card.querySelector('.btn-edit-jug').addEventListener('click', (e) => {
+        element.querySelector('.btn-edit-jug').addEventListener('click', (e) => {
             document.getElementById('input-jugador-nombre').value = jug.nombre;
             document.getElementById('input-jugador-posicion').value = jug.posicion;
             document.getElementById('input-jugador-dorsal').value = jug.dorsal;
@@ -241,7 +344,4 @@ function renderizar() {
             document.querySelector('#modal-jugador h3').innerText = "Editar Jugador";
             document.getElementById('modal-jugador').classList.remove('hidden');
         });
-
-        contenedor.appendChild(card);
-    });
 }
