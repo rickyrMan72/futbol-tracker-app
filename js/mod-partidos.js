@@ -10,6 +10,7 @@ let unsubPartidos = null;
 const contenedor = document.getElementById('lista-partidos-container');
 
 let mostrarHistoricos = false;
+let viewModePartidos = localStorage.getItem('partidosViewMode') || 'cards';
 
 let currentShareText = "";
 
@@ -17,6 +18,37 @@ export function initPartidos() {
     if (!auth.currentUser) return;
     
     // Subscription dynamically handled in renderizarPartidos
+
+    const btnViewCards = document.getElementById('btn-partidos-view-cards');
+    const btnViewList = document.getElementById('btn-partidos-view-list');
+
+    if (btnViewCards && btnViewList) {
+        const updateViewButtons = () => {
+            if (viewModePartidos === 'cards') {
+                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+                btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+            } else {
+                btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+            }
+        };
+
+        updateViewButtons();
+
+        btnViewCards.addEventListener('click', () => {
+            viewModePartidos = 'cards';
+            localStorage.setItem('partidosViewMode', 'cards');
+            updateViewButtons();
+            dibujarPartidos();
+        });
+
+        btnViewList.addEventListener('click', () => {
+            viewModePartidos = 'list';
+            localStorage.setItem('partidosViewMode', 'list');
+            updateViewButtons();
+            dibujarPartidos();
+        });
+    }
     
     document.getElementById('btn-close-modal-estadisticas')?.addEventListener('click', () => {
         document.getElementById('modal-estadisticas').classList.add('hidden');
@@ -263,6 +295,71 @@ export function renderizarPartidos() {
     }
 }
 
+function bindPartidoEvents(el, par, isFinalizadoMatch) {
+    el.querySelector('.btn-del-par')?.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (await confirmarAccion('¿Eliminar partido?')) {
+            try {
+                await deleteDoc(doc(db, 'partidos', par.id));
+                mostrarNotificacion("Partido eliminado");
+            } catch(err) {
+                mostrarNotificacion("Error al eliminar", true);
+            }
+        }
+    });
+
+    el.querySelector('.btn-play-par')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const event = new CustomEvent('open-directo', { detail: par.id });
+        document.dispatchEvent(event);
+    });
+
+    if (isFinalizadoMatch) {
+        const statsBtnEl = el.querySelector('.btn-stats-par');
+        if (statsBtnEl) {
+            statsBtnEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                abrirEstadisticas(par);
+            });
+        }
+    }
+
+    el.querySelector('.btn-edit-par')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('input-partido-rival').value = par.rival;
+        document.getElementById('input-partido-local').checked = par.esLocal !== false;
+        document.getElementById('input-partido-escudo-rival').value = par.escudoRival || '';
+        document.getElementById('input-partido-fecha').value = par.fecha;
+        document.getElementById('input-partido-hora').value = par.hora;
+        document.getElementById('input-partido-lugar').value = par.lugar || '';
+        document.getElementById('input-partido-comentarios').value = par.comentarios || '';
+        
+        const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === equipoIdActivo);
+        jugadoresEquipo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+
+        document.getElementById('partido-jugadores-list').innerHTML = jugadoresEquipo.map(jug => {
+            const esConv = (par.convocados || []).includes(jug.id);
+            const esTit = (par.titulares || []).includes(jug.id);
+            
+            return `
+                <label class="flex justify-between items-center text-sm p-2 hover:bg-slate-100 rounded cursor-pointer border-b border-slate-100 border-opacity-50">
+                    <span class="truncate pr-2">#${jug.dorsal} ${jug.nombre}</span>
+                    <div class="flex gap-4 min-w-max">
+                        <input type="checkbox" value="${jug.id}" class="chk-convocado w-5 h-5 rounded border-slate-300 text-amber-500 focus:ring-amber-500" ${esConv ? 'checked' : ''}>
+                        <input type="checkbox" value="${jug.id}" class="chk-titular w-5 h-5 rounded border-slate-300 text-red-500 focus:ring-red-500" ${esTit ? 'checked' : ''} ${!esConv ? 'disabled' : ''}>
+                    </div>
+                </label>
+            `;
+        }).join('');
+        
+        añadirEventosCheckboxes();
+
+        document.getElementById('form-partido').dataset.editId = par.id;
+        document.querySelector('#modal-partido h3').innerText = "Editar Partido";
+        document.getElementById('modal-partido').classList.remove('hidden');
+    });
+}
+
 function dibujarPartidos() {
     const msgNoEquipo = document.getElementById('msg-no-equipo-partido');
     const btnAddPartido = document.getElementById('btn-open-modal-partido');
@@ -273,9 +370,6 @@ function dibujarPartidos() {
 
     const equipoActual = todosLosEquipos.find(eq => eq.id === equipoIdActivo);
     const partidosEquipo = todosLosPartidos; // ya filtrados
-
-
-    contenedor.innerHTML = partidosEquipo.length === 0 ? `<div class="col-span-full py-10 text-center text-slate-400">Sin partidos planificados</div>` : '';
 
     const ahora = new Date();
     const hoyStr = ahora.toISOString().split('T')[0];
@@ -297,168 +391,243 @@ function dibujarPartidos() {
     }
 
     if (partidosToShow.length === 0) {
+        contenedor.className = 'space-y-4 flex-1 overflow-y-auto overflow-x-hidden pb-6 px-3 -mx-3';
         contenedor.innerHTML = `<div class="col-span-full py-10 text-center text-slate-400">No hay partidos ${mostrarHistoricos ? '' : 'próximos '}para mostrar</div>`;
+        return;
     }
 
-    partidosToShow.forEach(par => {
-        const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
-        const isPast = fechaPartido < ahora;
-        const isToday = par.fecha === hoyStr;
-        const isNext = par.id === idProximo;
-
-        const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
-
-        let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
-        let actionTitle = 'Jugar / Ver Directo';
-        let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
-
-        let cardClasses = 'bg-white rounded-xl border p-5 mt-3 relative flex flex-col group transition-all duration-300 hover:shadow-md';
-        let statusBadge = '';
-
-        if (isFinalizadoMatch) {
-            actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
-            actionTitle = 'Planilla Original';
-            actionColorClass = 'bg-blue-500 hover:bg-blue-600';
-            
-            // Add extra button for stats
-            var statsBtn = `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>`;
-        }
-
-        if (isPast && !isToday) {
-            cardClasses += ' grayscale opacity-70 border-slate-200';
-            statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">FINALIZADO</span>';
-        } else if (isNext) {
-            cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg relative z-10 ring-2 ring-amber-400';
-            statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">PRÓXIMO PARTIDO</span>';
-        } else if (isToday) {
-            cardClasses += ' border-blue-400 shadow-blue-100 shadow-md';
-            statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">HOY</span>';
-        } else {
-            cardClasses += ' border-slate-200';
-        }
-
-        const escudoLocal = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-12 h-12 object-contain" alt="Local">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
-        const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-12 h-12 object-contain" alt="Rival">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
-
-        const nomLocal = equipoActual?.nombre || 'Mi Equipo';
-        const nomRival = par.rival || 'Rival';
-
-        let equipoIzquierdaEscudo, equipoIzquierdaNombre;
-        let equipoDerechaEscudo, equipoDerechaNombre;
-
-        // Si esLocal es false (visitante), Rival va a la izquierda y Mi Equipo a la derecha
-        if (par.esLocal === false) {
-            equipoIzquierdaEscudo = escudoRivalImg;
-            equipoIzquierdaNombre = nomRival;
-            equipoDerechaEscudo = escudoLocal;
-            equipoDerechaNombre = nomLocal;
-        } else {
-            equipoIzquierdaEscudo = escudoLocal;
-            equipoIzquierdaNombre = nomLocal;
-            equipoDerechaEscudo = escudoRivalImg;
-            equipoDerechaNombre = nomRival;
-        }
-
-        const card = document.createElement('div');
-        card.className = cardClasses;
-        card.innerHTML = `
-            ${statusBadge}
-            <div class="absolute top-2 left-2 flex gap-1 z-20">
-                <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="${actionTitle}">${actionIcon}</button>
-                ${isFinalizadoMatch ? statsBtn : ''}
-            </div>
-            <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
-                <button class="require-editor btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
-                <button class="require-editor btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
-            </div>
-            
-            <div class="text-center font-bold text-slate-500 mb-4 mt-2 text-sm flex justify-center items-center gap-2">
-                <i class="fa-regular fa-calendar"></i> ${par.fecha.split('-').reverse().join('/')} &nbsp;|&nbsp; <i class="fa-regular fa-clock"></i> ${par.hora}
-            </div>
-
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex flex-col items-center flex-1 w-1/3">
-                    ${equipoIzquierdaEscudo}
-                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoIzquierdaNombre}</span>
+    if (viewModePartidos === 'list') {
+        contenedor.className = 'w-full flex-1 overflow-y-auto overflow-x-auto pb-6 px-1';
+        contenedor.innerHTML = `
+            <div class="min-w-full inline-block align-middle">
+                <div class="overflow-hidden border border-slate-200 rounded-xl shadow-sm bg-white">
+                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-600">
+                        <thead class="bg-slate-50 text-slate-700 uppercase text-[11px] font-bold tracking-wider">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-center">Estado</th>
+                                <th scope="col" class="px-4 py-3">Fecha / Hora</th>
+                                <th scope="col" class="px-4 py-3">Partido</th>
+                                <th scope="col" class="px-4 py-3 text-center">Resultado</th>
+                                <th scope="col" class="px-4 py-3">Lugar / Condición</th>
+                                <th scope="col" class="px-4 py-3 text-center">Plantilla</th>
+                                <th scope="col" class="px-4 py-3 text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-partidos-body" class="divide-y divide-slate-100 bg-white">
+                        </tbody>
+                    </table>
                 </div>
-                <div class="font-black text-xl flex-shrink-0 px-4 ${par.resultado ? 'text-blue-600 bg-blue-50 py-1 rounded-lg' : 'text-slate-300'}">${par.resultado || 'VS'}</div>
-                <div class="flex flex-col items-center flex-1 w-1/3">
-                    ${equipoDerechaEscudo}
-                    <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoDerechaNombre}</span>
-                </div>
-            </div>
-
-            ${par.lugar ? `<div class="text-xs text-slate-500 text-center mb-1"><i class="fa-solid fa-location-dot mr-1"></i> ${par.lugar}</div>` : ''}
-            ${par.comentarios ? `<div class="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center mt-2 mx-4">${par.comentarios}</div>` : ''}
-
-            <div class="mt-4 pt-3 border-t text-xs text-slate-500 flex justify-around">
-                <span><i class="fa-solid fa-clipboard-user border rounded p-1 mb-1 bg-slate-50"></i> Conv: <b>${par.convocados?.length || 0}</b></span>
-                <span><i class="fa-solid fa-users border rounded p-1 mb-1 bg-slate-50"></i> Tit: <b>${par.titulares?.length || 0}</b></span>
             </div>
         `;
-        
-        card.querySelector('.btn-del-par').addEventListener('click', async () => {
-            if (await confirmarAccion('¿Eliminar partido?')) {
-                try {
-                    await deleteDoc(doc(db, 'partidos', par.id));
-                    mostrarNotificacion("Partido eliminado");
-                } catch(err) {
-                    mostrarNotificacion("Error al eliminar", true);
-                }
+
+        const tbody = contenedor.querySelector('#table-partidos-body');
+
+        partidosToShow.forEach(par => {
+            const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
+            const isPast = fechaPartido < ahora;
+            const isToday = par.fecha === hoyStr;
+            const isNext = par.id === idProximo;
+            const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
+
+            let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
+            let actionTitle = 'Jugar / Ver Directo';
+            let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
+
+            if (isFinalizadoMatch) {
+                actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
+                actionTitle = 'Planilla Original';
+                actionColorClass = 'bg-blue-500 hover:bg-blue-600';
             }
-        });
 
-        card.querySelector('.btn-play-par').addEventListener('click', () => {
-            // Dispatch event to switch view to view-directo and load the match
-            const event = new CustomEvent('open-directo', { detail: par.id });
-            document.dispatchEvent(event);
-        });
+            let statusBadge = '';
+            let rowClasses = 'hover:bg-slate-50 transition-colors group';
 
-        if (isFinalizadoMatch) {
-            const statsBtnEl = card.querySelector('.btn-stats-par');
-            if (statsBtnEl) {
-                statsBtnEl.addEventListener('click', () => {
-                    abrirEstadisticas(par);
-                });
+            if (isPast && !isToday) {
+                rowClasses += ' opacity-75 bg-slate-50/40';
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap"><i class="fa-solid fa-flag-checkered mr-1 text-[10px]"></i> Finalizado</span>';
+            } else if (isNext) {
+                rowClasses += ' bg-amber-50/20 border-l-4 border-l-amber-500 font-medium';
+                statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm whitespace-nowrap"><i class="fa-solid fa-star mr-1 text-[10px] text-amber-600"></i> Próximo</span>';
+            } else if (isToday) {
+                rowClasses += ' bg-blue-50/20 border-l-4 border-l-blue-500 font-medium';
+                statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 whitespace-nowrap"><i class="fa-solid fa-bell mr-1 text-[10px] text-blue-600"></i> Hoy</span>';
+            } else {
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap"><i class="fa-regular fa-calendar-check mr-1 text-[10px]"></i> Programado</span>';
             }
-        }
 
-        card.querySelector('.btn-edit-par').addEventListener('click', () => {
-            document.getElementById('input-partido-rival').value = par.rival;
-            document.getElementById('input-partido-local').checked = par.esLocal !== false;
-            document.getElementById('input-partido-escudo-rival').value = par.escudoRival || '';
-            document.getElementById('input-partido-fecha').value = par.fecha;
-            document.getElementById('input-partido-hora').value = par.hora;
-            document.getElementById('input-partido-lugar').value = par.lugar || '';
-            document.getElementById('input-partido-comentarios').value = par.comentarios || '';
-            
-            const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === equipoIdActivo);
-            jugadoresEquipo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+            const escudoLocalSm = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Local">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
+            const escudoRivalSm = par.escudoRival ? `<img src="${par.escudoRival}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Rival">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
 
-            document.getElementById('partido-jugadores-list').innerHTML = jugadoresEquipo.map(jug => {
-                const esConv = (par.convocados || []).includes(jug.id);
-                const esTit = (par.titulares || []).includes(jug.id);
-                
-                return `
-                    <label class="flex justify-between items-center text-sm p-2 hover:bg-slate-100 rounded cursor-pointer border-b border-slate-100 border-opacity-50">
-                        <span class="truncate pr-2">#${jug.dorsal} ${jug.nombre}</span>
-                        <div class="flex gap-4 min-w-max">
-                            <input type="checkbox" value="${jug.id}" class="chk-convocado w-5 h-5 rounded border-slate-300 text-amber-500 focus:ring-amber-500" ${esConv ? 'checked' : ''}>
-                            <input type="checkbox" value="${jug.id}" class="chk-titular w-5 h-5 rounded border-slate-300 text-red-500 focus:ring-red-500" ${esTit ? 'checked' : ''} ${!esConv ? 'disabled' : ''}>
+            const nomLocal = equipoActual?.nombre || 'Mi Equipo';
+            const nomRival = par.rival || 'Rival';
+
+            let eqIzdaSm = par.esLocal === false ? escudoRivalSm : escudoLocalSm;
+            let eqIzdaNm = par.esLocal === false ? nomRival : nomLocal;
+            let eqDchaSm = par.esLocal === false ? escudoLocalSm : escudoRivalSm;
+            let eqDchaNm = par.esLocal === false ? nomLocal : nomRival;
+
+            const fechaFormatted = par.fecha ? par.fecha.split('-').reverse().join('/') : '-';
+
+            const tr = document.createElement('tr');
+            tr.className = rowClasses;
+            tr.innerHTML = `
+                <td class="px-4 py-3 text-center whitespace-nowrap">
+                    ${statusBadge}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="font-bold text-slate-800 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400 text-xs"></i> ${fechaFormatted}</div>
+                    <div class="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5"><i class="fa-regular fa-clock text-slate-400 text-xs"></i> ${par.hora || '--:--'}</div>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1.5 ${par.esLocal !== false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
+                            ${eqIzdaSm}
+                            <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqIzdaNm}">${eqIzdaNm}</span>
                         </div>
-                    </label>
-                `;
-            }).join('');
-            
-            añadirEventosCheckboxes();
+                        <span class="text-xs font-bold text-slate-400 px-0.5">vs</span>
+                        <div class="flex items-center gap-1.5 ${par.esLocal === false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
+                            ${eqDchaSm}
+                            <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqDchaNm}">${eqDchaNm}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-center whitespace-nowrap">
+                    ${par.resultado ? `<span class="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 font-black rounded-lg border border-blue-200 text-sm">${par.resultado}</span>` : `<span class="text-slate-300 font-bold text-xs">-</span>`}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                    <div>
+                        ${par.esLocal !== false ? '<span class="inline-flex items-center text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded"><i class="fa-solid fa-house text-[10px] mr-1"></i> Local</span>' : '<span class="inline-flex items-center text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded"><i class="fa-solid fa-bus text-[10px] mr-1"></i> Visitante</span>'}
+                    </div>
+                    ${par.lugar ? `<div class="text-xs text-slate-500 truncate max-w-[160px] mt-0.5" title="${par.lugar}"><i class="fa-solid fa-location-dot text-slate-400 mr-1 text-[10px]"></i>${par.lugar}</div>` : ''}
+                </td>
+                <td class="px-4 py-3 text-center whitespace-nowrap">
+                    <div class="inline-flex items-center justify-center gap-3 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span title="Convocados" class="flex items-center gap-1"><i class="fa-solid fa-clipboard-user text-amber-500"></i> <b>${par.convocados?.length || 0}</b></span>
+                        <span class="text-slate-300">|</span>
+                        <span title="Titulares" class="flex items-center gap-1"><i class="fa-solid fa-users text-rose-500"></i> <b>${par.titulares?.length || 0}</b></span>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="${actionTitle}">
+                            ${actionIcon}
+                        </button>
+                        ${isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : ''}
+                        <button class="require-editor btn-edit-par w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button class="require-editor btn-del-par w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </td>
+            `;
 
-            document.getElementById('form-partido').dataset.editId = par.id;
-            document.querySelector('#modal-partido h3').innerText = "Editar Partido";
-            document.getElementById('modal-partido').classList.remove('hidden');
+            bindPartidoEvents(tr, par, isFinalizadoMatch);
+            tbody.appendChild(tr);
         });
 
-        contenedor.appendChild(card);
-    });
+    } else {
+        // CARDS MODE
+        contenedor.className = 'space-y-4 flex-1 overflow-y-auto overflow-x-hidden pb-6 px-3 -mx-3';
+        contenedor.innerHTML = '';
+
+        partidosToShow.forEach(par => {
+            const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
+            const isPast = fechaPartido < ahora;
+            const isToday = par.fecha === hoyStr;
+            const isNext = par.id === idProximo;
+
+            const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
+
+            let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
+            let actionTitle = 'Jugar / Ver Directo';
+            let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
+
+            let cardClasses = 'bg-white rounded-xl border p-5 mt-3 relative flex flex-col group transition-all duration-300 hover:shadow-md';
+            let statusBadge = '';
+
+            const statsBtn = isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : '';
+
+            if (isFinalizadoMatch) {
+                actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
+                actionTitle = 'Planilla Original';
+                actionColorClass = 'bg-blue-500 hover:bg-blue-600';
+            }
+
+            if (isPast && !isToday) {
+                cardClasses += ' grayscale opacity-70 border-slate-200';
+                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">FINALIZADO</span>';
+            } else if (isNext) {
+                cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg relative z-10 ring-2 ring-amber-400';
+                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">PRÓXIMO PARTIDO</span>';
+            } else if (isToday) {
+                cardClasses += ' border-blue-400 shadow-blue-100 shadow-md';
+                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">HOY</span>';
+            } else {
+                cardClasses += ' border-slate-200';
+            }
+
+            const escudoLocal = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-12 h-12 object-contain" alt="Local">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+            const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-12 h-12 object-contain" alt="Rival">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+
+            const nomLocal = equipoActual?.nombre || 'Mi Equipo';
+            const nomRival = par.rival || 'Rival';
+
+            let equipoIzquierdaEscudo, equipoIzquierdaNombre;
+            let equipoDerechaEscudo, equipoDerechaNombre;
+
+            // Si esLocal es false (visitante), Rival va a la izquierda y Mi Equipo a la derecha
+            if (par.esLocal === false) {
+                equipoIzquierdaEscudo = escudoRivalImg;
+                equipoIzquierdaNombre = nomRival;
+                equipoDerechaEscudo = escudoLocal;
+                equipoDerechaNombre = nomLocal;
+            } else {
+                equipoIzquierdaEscudo = escudoLocal;
+                equipoIzquierdaNombre = nomLocal;
+                equipoDerechaEscudo = escudoRivalImg;
+                equipoDerechaNombre = nomRival;
+            }
+
+            const card = document.createElement('div');
+            card.className = cardClasses;
+            card.innerHTML = `
+                ${statusBadge}
+                <div class="absolute top-2 left-2 flex gap-1 z-20">
+                    <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="${actionTitle}">${actionIcon}</button>
+                    ${statsBtn}
+                </div>
+                <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
+                    <button class="require-editor btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
+                    <button class="require-editor btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                
+                <div class="text-center font-bold text-slate-500 mb-4 mt-2 text-sm flex justify-center items-center gap-2">
+                    <i class="fa-regular fa-calendar"></i> ${par.fecha.split('-').reverse().join('/')} &nbsp;|&nbsp; <i class="fa-regular fa-clock"></i> ${par.hora}
+                </div>
+
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex flex-col items-center flex-1 w-1/3">
+                        ${equipoIzquierdaEscudo}
+                        <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoIzquierdaNombre}</span>
+                    </div>
+                    <div class="font-black text-xl flex-shrink-0 px-4 ${par.resultado ? 'text-blue-600 bg-blue-50 py-1 rounded-lg' : 'text-slate-300'}">${par.resultado || 'VS'}</div>
+                    <div class="flex flex-col items-center flex-1 w-1/3">
+                        ${equipoDerechaEscudo}
+                        <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoDerechaNombre}</span>
+                    </div>
+                </div>
+
+                ${par.lugar ? `<div class="text-xs text-slate-500 text-center mb-1"><i class="fa-solid fa-location-dot mr-1"></i> ${par.lugar}</div>` : ''}
+                ${par.comentarios ? `<div class="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center mt-2 mx-4">${par.comentarios}</div>` : ''}
+
+                <div class="mt-4 pt-3 border-t text-xs text-slate-500 flex justify-around">
+                    <span><i class="fa-solid fa-clipboard-user border rounded p-1 mb-1 bg-slate-50"></i> Conv: <b>${par.convocados?.length || 0}</b></span>
+                    <span><i class="fa-solid fa-users border rounded p-1 mb-1 bg-slate-50"></i> Tit: <b>${par.titulares?.length || 0}</b></span>
+                </div>
+            `;
+            
+            bindPartidoEvents(card, par, isFinalizadoMatch);
+            contenedor.appendChild(card);
+        });
+    }
 }
 
 async function abrirEstadisticas(par) {
