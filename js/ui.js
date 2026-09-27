@@ -93,8 +93,12 @@ export function initNavigation() {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            navLinks.forEach(l => l.className = 'nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors');
-            link.className = 'nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors';
+            navLinks.forEach(l => {
+                l.classList.remove('bg-emerald-600', 'border-emerald-400');
+                l.classList.add('hover:bg-slate-800', 'hover:text-white', 'border-transparent');
+            });
+            link.classList.remove('hover:bg-slate-800', 'hover:text-white', 'border-transparent');
+            link.classList.add('bg-emerald-600', 'text-white', 'border-emerald-400');
             const targetId = link.getAttribute('data-target');
             views.forEach(v => v.classList.add('hidden'));
             document.getElementById(targetId).classList.remove('hidden');

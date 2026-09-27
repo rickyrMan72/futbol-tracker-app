@@ -1,15 +1,22 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>FútbolApp - Gestión Deportiva</title>
+    <meta name="description" content="Una Single Page Application (SPA) para entrenadores de fútbol, que permite gestionar la plantilla, crear ejercicios y planificar sesiones de entrenamiento.">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .chart-container { position: relative; width: 100%; height: 300px; }
@@ -29,36 +36,53 @@
         body.role-viewer #pizarra-campo-container { pointer-events: none; }
         body.role-viewer #pizarra-formacion { pointer-events: none; opacity: 0.5; }
         body.role-viewer #btn-pizarra-reset { display: none !important; }
+
+        /* Barra de desplazamiento sutil para el sidebar */
+        #sidebar-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        #sidebar-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #sidebar-scroll::-webkit-scrollbar-thumb {
+            background-color: rgba(148, 163, 184, 0.25);
+            border-radius: 4px;
+        }
+        #sidebar-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(148, 163, 184, 0.45);
+        }
     </style>
 </head>
-<body class="bg-slate-50 font-sans text-slate-800 flex h-screen overflow-hidden">
+<body class="bg-slate-50 font-sans text-slate-800 flex h-full overflow-hidden">
 
     <!-- BARRA LATERAL (SIDEBAR) -->
-    <aside id="sidebar" class="bg-slate-900 text-slate-300 w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20">
-        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+    <aside id="sidebar" class="bg-slate-900 text-slate-300 w-60 sm:w-64 flex-shrink-0 hidden md:flex flex-col shadow-xl z-20 h-full overflow-hidden">
+        <div class="h-14 sm:h-16 flex items-center px-5 sm:px-6 border-b border-slate-800 bg-slate-950 shrink-0">
             <i class="fa-solid fa-futbol text-emerald-400 text-xl mr-3"></i>
             <span class="text-white font-bold text-lg tracking-wide">FútbolApp</span>
         </div>
-        <nav class="flex-1 overflow-y-auto py-4">
-            <ul class="space-y-1" id="nav-menu">
-                <li><a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-house w-6 text-center mr-2"></i><span class="font-medium">Inicio</span></a></li>
-                <li><a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-users w-6 text-center mr-2"></i><span class="font-medium">Plantilla</span></a></li>
-                <li><a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i><span class="font-medium">Ejercicios</span></a></li>
-                <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium">Sesiones</span></a></li>
-                <li><a href="#" data-target="view-partidos" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-trophy w-6 text-center mr-2"></i><span class="font-medium">Partidos</span></a></li>
-                <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium">Pizarra</span></a></li>
-            </ul>
-        </nav>
-        <div class="mt-auto pb-4">
-            <ul class="space-y-1">
-                <li><a href="#" data-target="view-configuracion" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-6 py-3 transition-colors"><i class="fa-solid fa-gear w-6 text-center mr-2"></i><span class="font-medium">Configuración</span></a></li>
-            </ul>
+        <div id="sidebar-scroll" class="flex-1 min-h-0 overflow-y-auto flex flex-col">
+            <nav class="py-2 shrink-0">
+                <ul class="space-y-0.5 sm:space-y-1" id="nav-menu">
+                    <li><a href="#" data-target="view-dashboard" class="nav-link bg-emerald-600 text-white border-r-4 border-emerald-400 flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-house w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Inicio</span></a></li>
+                    <li><a href="#" data-target="view-plantilla" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-users w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Plantilla</span></a></li>
+                    <li><a href="#" data-target="view-ejercicios" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-clipboard-list w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Ejercicios</span></a></li>
+                    <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Sesiones</span></a></li>
+                    <li><a href="#" data-target="view-partidos" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-trophy w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Partidos</span></a></li>
+                    <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Pizarra</span></a></li>
+                </ul>
+            </nav>
+            <div class="mt-auto p-2 border-t border-slate-800/70 shrink-0">
+                <ul class="space-y-1">
+                    <li><a href="#" data-target="view-configuracion" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 py-2 sm:py-2.5 text-sm sm:text-base transition-colors rounded-r"><i class="fa-solid fa-gear w-6 text-center mr-2"></i><span class="font-medium">Configuración</span></a></li>
+                </ul>
+            </div>
         </div>
     </aside>
 
     <!-- ÁREA PRINCIPAL -->
-    <div class="flex-1 flex flex-col overflow-hidden relative">
-        <header class="h-16 bg-emerald-700 sm:bg-white shadow-sm flex items-center justify-between px-4 sm:px-6 z-10 flex-shrink-0">
+    <div class="flex-1 flex flex-col h-full overflow-hidden relative">
+        <header class="h-14 sm:h-16 bg-emerald-700 sm:bg-white shadow-sm flex items-center justify-between px-4 sm:px-6 z-10 flex-shrink-0">
             <div class="flex items-center gap-3 sm:gap-4 w-full">
                 <button id="btn-mobile-menu" class="text-white sm:text-slate-500 hover:text-slate-200 sm:hover:text-slate-800"><i class="fa-solid fa-bars text-xl"></i></button>
                 <h2 id="header-title" class="text-lg sm:text-xl font-semibold text-white sm:text-slate-800 hidden xl:block min-w-max mr-2">Panel de Control</h2>
