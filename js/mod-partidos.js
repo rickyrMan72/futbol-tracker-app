@@ -11,41 +11,65 @@ const contenedor = document.getElementById('lista-partidos-container');
 
 let mostrarHistoricos = false;
 let viewModePartidos = localStorage.getItem('partidosViewMode') || 'cards';
+let partidosEventsBound = false;
 
 let currentShareText = "";
 
-export function initPartidos() {
-    if (!auth.currentUser) return;
-    
-    // Subscription dynamically handled in renderizarPartidos
+function actualizarBotonHistoricos() {
+    const btn = document.getElementById('btn-toggle-historicos');
+    if (!btn) return;
+    if (mostrarHistoricos) {
+        btn.innerHTML = '<i class="fa-solid fa-eye-slash mr-2"></i> Ocultar Históricos';
+        btn.classList.add('bg-slate-200', 'text-slate-800');
+        btn.classList.remove('bg-slate-100', 'text-slate-700');
+    } else {
+        btn.innerHTML = '<i class="fa-solid fa-clock-rotate-left mr-2"></i> Ver Históricos';
+        btn.classList.remove('bg-slate-200', 'text-slate-800');
+        btn.classList.add('bg-slate-100', 'text-slate-700');
+    }
+}
 
+export function initPartidos() {
     const btnViewCards = document.getElementById('btn-partidos-view-cards');
     const btnViewList = document.getElementById('btn-partidos-view-list');
 
-    if (btnViewCards && btnViewList) {
-        const updateViewButtons = () => {
-            if (viewModePartidos === 'cards') {
-                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
-                btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
-            } else {
-                btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
-                btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
-            }
-        };
+    const updateViewButtons = () => {
+        if (!btnViewCards || !btnViewList) return;
+        if (viewModePartidos === 'cards') {
+            btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+            btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+        } else {
+            btnViewList.className = 'flex-1 sm:flex-none px-3 py-1.5 bg-white shadow-sm text-slate-800 rounded-md text-sm font-medium transition-all';
+            btnViewCards.className = 'flex-1 sm:flex-none px-3 py-1.5 text-slate-500 hover:text-slate-700 rounded-md text-sm font-medium transition-all';
+        }
+    };
 
-        updateViewButtons();
+    updateViewButtons();
 
-        btnViewCards.addEventListener('click', () => {
-            viewModePartidos = 'cards';
-            localStorage.setItem('partidosViewMode', 'cards');
-            updateViewButtons();
-            dibujarPartidos();
-        });
+    if (!partidosEventsBound) {
+        partidosEventsBound = true;
 
-        btnViewList.addEventListener('click', () => {
-            viewModePartidos = 'list';
-            localStorage.setItem('partidosViewMode', 'list');
-            updateViewButtons();
+        if (btnViewCards) {
+            btnViewCards.addEventListener('click', () => {
+                viewModePartidos = 'cards';
+                localStorage.setItem('partidosViewMode', 'cards');
+                updateViewButtons();
+                dibujarPartidos();
+            });
+        }
+
+        if (btnViewList) {
+            btnViewList.addEventListener('click', () => {
+                viewModePartidos = 'list';
+                localStorage.setItem('partidosViewMode', 'list');
+                updateViewButtons();
+                dibujarPartidos();
+            });
+        }
+
+        document.getElementById('btn-toggle-historicos')?.addEventListener('click', () => {
+            mostrarHistoricos = !mostrarHistoricos;
+            actualizarBotonHistoricos();
             dibujarPartidos();
         });
     }
@@ -145,17 +169,6 @@ export function initPartidos() {
             if (playersListWrapper) playersListWrapper.classList.add('overflow-x-auto');
             if (exportGrid) exportGrid.classList.add('md:grid-cols-2');
         });
-    });
-
-    document.getElementById('btn-toggle-historicos').addEventListener('click', () => {
-        mostrarHistoricos = !mostrarHistoricos;
-        const btn = document.getElementById('btn-toggle-historicos');
-        if (mostrarHistoricos) {
-            btn.innerHTML = '<i class="fa-solid fa-eye-slash mr-2"></i> Ocultar Históricos';
-        } else {
-            btn.innerHTML = '<i class="fa-solid fa-clock-rotate-left mr-2"></i> Ver Históricos';
-        }
-        renderizarPartidos();
     });
 
     const prepPartido = () => {
@@ -364,26 +377,38 @@ function dibujarPartidos() {
     const msgNoEquipo = document.getElementById('msg-no-equipo-partido');
     const btnAddPartido = document.getElementById('btn-open-modal-partido');
 
+    if (!contenedor) return;
+
     contenedor.classList.remove('hidden');
     if (msgNoEquipo) msgNoEquipo.classList.add('hidden');
     if (btnAddPartido) btnAddPartido.disabled = false;
 
     const equipoActual = todosLosEquipos.find(eq => eq.id === equipoIdActivo);
-    const partidosEquipo = todosLosPartidos; // ya filtrados
+    const partidosEquipo = todosLosPartidos || [];
 
     const ahora = new Date();
     const hoyStr = ahora.toISOString().split('T')[0];
     
     // Convertir fechas para saber cual es el próximo
-    const partidosFuturos = partidosEquipo.filter(p => new Date(`${p.fecha}T${p.hora}`) >= ahora);
+    const partidosFuturos = partidosEquipo.filter(p => {
+        if (!p.fecha) return false;
+        const horaStr = p.hora || '00:00';
+        return new Date(`${p.fecha}T${horaStr}`) >= ahora;
+    });
     const idProximo = partidosFuturos.length > 0 ? partidosFuturos[0].id : null;
 
-    actualizarDashboardUltimoPartido(partidosEquipo, ahora);
+    try {
+        actualizarDashboardUltimoPartido(partidosEquipo, ahora);
+    } catch(e) {
+        console.warn("Error al actualizar dashboard:", e);
+    }
 
     let partidosToShow = partidosEquipo;
     if (!mostrarHistoricos) {
         partidosToShow = partidosEquipo.filter(p => {
-             const fechaPartido = new Date(`${p.fecha}T${p.hora}`);
+             if (!p.fecha) return true;
+             const horaStr = p.hora || '00:00';
+             const fechaPartido = new Date(`${p.fecha}T${horaStr}`);
              const isPast = fechaPartido < ahora;
              const isToday = p.fecha === hoyStr;
              return !isPast || isToday;
@@ -392,7 +417,25 @@ function dibujarPartidos() {
 
     if (partidosToShow.length === 0) {
         contenedor.className = 'space-y-4 flex-1 overflow-y-auto overflow-x-hidden pb-6 px-3 -mx-3';
-        contenedor.innerHTML = `<div class="col-span-full py-10 text-center text-slate-400">No hay partidos ${mostrarHistoricos ? '' : 'próximos '}para mostrar</div>`;
+        if (partidosEquipo.length > 0 && !mostrarHistoricos) {
+            contenedor.innerHTML = `
+                <div class="col-span-full py-12 text-center text-slate-400">
+                    <i class="fa-solid fa-clock-rotate-left text-4xl mb-3 text-slate-300 block"></i>
+                    <p class="text-base font-medium text-slate-600">No hay partidos próximos programados</p>
+                    <p class="text-xs text-slate-400 mt-1">Tienes ${partidosEquipo.length} partido(s) en el historial de este equipo.</p>
+                    <button id="btn-empty-ver-historicos" class="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors inline-flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-eye"></i> Ver Partidos Históricos
+                    </button>
+                </div>
+            `;
+            document.getElementById('btn-empty-ver-historicos')?.addEventListener('click', () => {
+                mostrarHistoricos = true;
+                actualizarBotonHistoricos();
+                dibujarPartidos();
+            });
+        } else {
+            contenedor.innerHTML = `<div class="col-span-full py-10 text-center text-slate-400">No hay partidos para mostrar</div>`;
+        }
         return;
     }
 
@@ -423,104 +466,120 @@ function dibujarPartidos() {
         const tbody = contenedor.querySelector('#table-partidos-body');
 
         partidosToShow.forEach(par => {
-            const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
-            const isPast = fechaPartido < ahora;
-            const isToday = par.fecha === hoyStr;
-            const isNext = par.id === idProximo;
-            const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
+            try {
+                const horaStr = par.hora || '00:00';
+                const fechaStr = par.fecha || '';
+                const fechaValida = fechaStr ? new Date(`${fechaStr}T${horaStr}`) : null;
+                const isPast = fechaValida ? fechaValida < ahora : false;
+                const isToday = fechaStr === hoyStr;
+                const isNext = par.id === idProximo;
+                const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
 
-            let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
-            let actionTitle = 'Jugar / Ver Directo';
-            let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
+                let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
+                let actionTitle = 'Jugar / Ver Directo';
+                let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
 
-            if (isFinalizadoMatch) {
-                actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
-                actionTitle = 'Planilla Original';
-                actionColorClass = 'bg-blue-500 hover:bg-blue-600';
-            }
+                if (isFinalizadoMatch) {
+                    actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
+                    actionTitle = 'Planilla Original';
+                    actionColorClass = 'bg-blue-500 hover:bg-blue-600';
+                }
 
-            let statusBadge = '';
-            let rowClasses = 'hover:bg-slate-50 transition-colors group';
+                let statusBadge = '';
+                let rowClasses = 'hover:bg-slate-50 transition-colors group';
 
-            if (isPast && !isToday) {
-                rowClasses += ' opacity-75 bg-slate-50/40';
-                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap"><i class="fa-solid fa-flag-checkered mr-1 text-[10px]"></i> Finalizado</span>';
-            } else if (isNext) {
-                rowClasses += ' bg-amber-50/20 border-l-4 border-l-amber-500 font-medium';
-                statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm whitespace-nowrap"><i class="fa-solid fa-star mr-1 text-[10px] text-amber-600"></i> Próximo</span>';
-            } else if (isToday) {
-                rowClasses += ' bg-blue-50/20 border-l-4 border-l-blue-500 font-medium';
-                statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 whitespace-nowrap"><i class="fa-solid fa-bell mr-1 text-[10px] text-blue-600"></i> Hoy</span>';
-            } else {
-                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap"><i class="fa-regular fa-calendar-check mr-1 text-[10px]"></i> Programado</span>';
-            }
+                if (isPast && !isToday) {
+                    rowClasses += ' opacity-75 bg-slate-50/40';
+                    statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap"><i class="fa-solid fa-flag-checkered mr-1 text-[10px]"></i> Finalizado</span>';
+                } else if (isNext) {
+                    rowClasses += ' bg-amber-50/20 border-l-4 border-l-amber-500 font-medium';
+                    statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-sm whitespace-nowrap"><i class="fa-solid fa-star mr-1 text-[10px] text-amber-600"></i> Próximo</span>';
+                } else if (isToday) {
+                    rowClasses += ' bg-blue-50/20 border-l-4 border-l-blue-500 font-medium';
+                    statusBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300 whitespace-nowrap"><i class="fa-solid fa-bell mr-1 text-[10px] text-blue-600"></i> Hoy</span>';
+                } else {
+                    statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap"><i class="fa-regular fa-calendar-check mr-1 text-[10px]"></i> Programado</span>';
+                }
 
-            const escudoLocalSm = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Local">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
-            const escudoRivalSm = par.escudoRival ? `<img src="${par.escudoRival}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Rival">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
+                const escudoLocalSm = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Local">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
+                const escudoRivalSm = par.escudoRival ? `<img src="${par.escudoRival}" class="w-6 h-6 object-contain rounded-full shrink-0" alt="Rival">` : `<div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0"><i class="fa-solid fa-shield"></i></div>`;
 
-            const nomLocal = equipoActual?.nombre || 'Mi Equipo';
-            const nomRival = par.rival || 'Rival';
+                const nomLocal = equipoActual?.nombre || 'Mi Equipo';
+                const nomRival = par.rival || 'Rival';
 
-            let eqIzdaSm = par.esLocal === false ? escudoRivalSm : escudoLocalSm;
-            let eqIzdaNm = par.esLocal === false ? nomRival : nomLocal;
-            let eqDchaSm = par.esLocal === false ? escudoLocalSm : escudoRivalSm;
-            let eqDchaNm = par.esLocal === false ? nomLocal : nomRival;
+                let eqIzdaSm = par.esLocal === false ? escudoRivalSm : escudoLocalSm;
+                let eqIzdaNm = par.esLocal === false ? nomRival : nomLocal;
+                let eqDchaSm = par.esLocal === false ? escudoLocalSm : escudoRivalSm;
+                let eqDchaNm = par.esLocal === false ? nomLocal : nomRival;
 
-            const fechaFormatted = par.fecha ? par.fecha.split('-').reverse().join('/') : '-';
+                let fechaFormatted = '-';
+                if (par.fecha) {
+                    if (par.fecha.includes('-')) {
+                        fechaFormatted = par.fecha.split('-').reverse().join('/');
+                    } else {
+                        fechaFormatted = par.fecha;
+                    }
+                }
 
-            const tr = document.createElement('tr');
-            tr.className = rowClasses;
-            tr.innerHTML = `
-                <td class="px-4 py-3 text-center whitespace-nowrap">
-                    ${statusBadge}
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                    <div class="font-bold text-slate-800 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400 text-xs"></i> ${fechaFormatted}</div>
-                    <div class="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5"><i class="fa-regular fa-clock text-slate-400 text-xs"></i> ${par.hora || '--:--'}</div>
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                    <div class="flex items-center gap-2">
-                        <div class="flex items-center gap-1.5 ${par.esLocal !== false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
-                            ${eqIzdaSm}
-                            <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqIzdaNm}">${eqIzdaNm}</span>
+                const numConvocados = Array.isArray(par.convocados) ? par.convocados.length : 0;
+                const numTitulares = Array.isArray(par.titulares) ? par.titulares.length : 0;
+
+                const tr = document.createElement('tr');
+                tr.className = rowClasses;
+                tr.innerHTML = `
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        ${statusBadge}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="font-bold text-slate-800 flex items-center gap-1.5"><i class="fa-regular fa-calendar text-slate-400 text-xs"></i> ${fechaFormatted}</div>
+                        <div class="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5"><i class="fa-regular fa-clock text-slate-400 text-xs"></i> ${par.hora || '--:--'}</div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 ${par.esLocal !== false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
+                                ${eqIzdaSm}
+                                <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqIzdaNm}">${eqIzdaNm}</span>
+                            </div>
+                            <span class="text-xs font-bold text-slate-400 px-0.5">vs</span>
+                            <div class="flex items-center gap-1.5 ${par.esLocal === false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
+                                ${eqDchaSm}
+                                <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqDchaNm}">${eqDchaNm}</span>
+                            </div>
                         </div>
-                        <span class="text-xs font-bold text-slate-400 px-0.5">vs</span>
-                        <div class="flex items-center gap-1.5 ${par.esLocal === false ? 'text-slate-900 font-extrabold' : 'text-slate-600 font-medium'}">
-                            ${eqDchaSm}
-                            <span class="truncate max-w-[130px] sm:max-w-[170px]" title="${eqDchaNm}">${eqDchaNm}</span>
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        ${par.resultado ? `<span class="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 font-black rounded-lg border border-blue-200 text-sm">${par.resultado}</span>` : `<span class="text-slate-300 font-bold text-xs">-</span>`}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div>
+                            ${par.esLocal !== false ? '<span class="inline-flex items-center text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded"><i class="fa-solid fa-house text-[10px] mr-1"></i> Local</span>' : '<span class="inline-flex items-center text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded"><i class="fa-solid fa-bus text-[10px] mr-1"></i> Visitante</span>'}
                         </div>
-                    </div>
-                </td>
-                <td class="px-4 py-3 text-center whitespace-nowrap">
-                    ${par.resultado ? `<span class="inline-block px-2.5 py-1 bg-blue-50 text-blue-700 font-black rounded-lg border border-blue-200 text-sm">${par.resultado}</span>` : `<span class="text-slate-300 font-bold text-xs">-</span>`}
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                    <div>
-                        ${par.esLocal !== false ? '<span class="inline-flex items-center text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded"><i class="fa-solid fa-house text-[10px] mr-1"></i> Local</span>' : '<span class="inline-flex items-center text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded"><i class="fa-solid fa-bus text-[10px] mr-1"></i> Visitante</span>'}
-                    </div>
-                    ${par.lugar ? `<div class="text-xs text-slate-500 truncate max-w-[160px] mt-0.5" title="${par.lugar}"><i class="fa-solid fa-location-dot text-slate-400 mr-1 text-[10px]"></i>${par.lugar}</div>` : ''}
-                </td>
-                <td class="px-4 py-3 text-center whitespace-nowrap">
-                    <div class="inline-flex items-center justify-center gap-3 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <span title="Convocados" class="flex items-center gap-1"><i class="fa-solid fa-clipboard-user text-amber-500"></i> <b>${par.convocados?.length || 0}</b></span>
-                        <span class="text-slate-300">|</span>
-                        <span title="Titulares" class="flex items-center gap-1"><i class="fa-solid fa-users text-rose-500"></i> <b>${par.titulares?.length || 0}</b></span>
-                    </div>
-                </td>
-                <td class="px-4 py-3 text-right whitespace-nowrap">
-                    <div class="flex items-center justify-end gap-1.5">
-                        <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="${actionTitle}">
-                            ${actionIcon}
-                        </button>
-                        ${isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : ''}
-                        <button class="require-editor btn-edit-par w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
-                        <button class="require-editor btn-del-par w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </td>
-            `;
+                        ${par.lugar ? `<div class="text-xs text-slate-500 truncate max-w-[160px] mt-0.5" title="${par.lugar}"><i class="fa-solid fa-location-dot text-slate-400 mr-1 text-[10px]"></i>${par.lugar}</div>` : ''}
+                    </td>
+                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                        <div class="inline-flex items-center justify-center gap-3 text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+                            <span title="Convocados" class="flex items-center gap-1"><i class="fa-solid fa-clipboard-user text-amber-500"></i> <b>${numConvocados}</b></span>
+                            <span class="text-slate-300">|</span>
+                            <span title="Titulares" class="flex items-center gap-1"><i class="fa-solid fa-users text-rose-500"></i> <b>${numTitulares}</b></span>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <div class="flex items-center justify-end gap-1.5">
+                            <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="${actionTitle}">
+                                ${actionIcon}
+                            </button>
+                            ${isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors shadow-sm flex items-center justify-center text-xs" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : ''}
+                            <button class="require-editor btn-edit-par w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                            <button class="require-editor btn-del-par w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center text-xs" data-id="${par.id}" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
+                `;
 
-            bindPartidoEvents(tr, par, isFinalizadoMatch);
-            tbody.appendChild(tr);
+                bindPartidoEvents(tr, par, isFinalizadoMatch);
+                tbody.appendChild(tr);
+            } catch(errPar) {
+                console.error("Error al renderizar fila de partido:", par, errPar);
+            }
         });
 
     } else {
@@ -529,103 +588,121 @@ function dibujarPartidos() {
         contenedor.innerHTML = '';
 
         partidosToShow.forEach(par => {
-            const fechaPartido = new Date(`${par.fecha}T${par.hora}`);
-            const isPast = fechaPartido < ahora;
-            const isToday = par.fecha === hoyStr;
-            const isNext = par.id === idProximo;
+            try {
+                const horaStr = par.hora || '00:00';
+                const fechaStr = par.fecha || '';
+                const fechaValida = fechaStr ? new Date(`${fechaStr}T${horaStr}`) : null;
+                const isPast = fechaValida ? fechaValida < ahora : false;
+                const isToday = fechaStr === hoyStr;
+                const isNext = par.id === idProximo;
 
-            const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
+                const isFinalizadoMatch = par.cronometro?.periodo === 'Finalizado' || (isPast && !isToday);
 
-            let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
-            let actionTitle = 'Jugar / Ver Directo';
-            let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
+                let actionIcon = '<i class="fa-solid fa-play ml-0.5"></i>';
+                let actionTitle = 'Jugar / Ver Directo';
+                let actionColorClass = 'bg-emerald-500 hover:bg-emerald-600';
 
-            let cardClasses = 'bg-white rounded-xl border p-5 mt-3 relative flex flex-col group transition-all duration-300 hover:shadow-md';
-            let statusBadge = '';
+                let cardClasses = 'bg-white rounded-xl border p-5 mt-3 relative flex flex-col group transition-all duration-300 hover:shadow-md';
+                let statusBadge = '';
 
-            const statsBtn = isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : '';
+                const statsBtn = isFinalizadoMatch ? `<button class="btn-stats-par w-8 h-8 bg-purple-500 hover:bg-purple-600 text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="Estadísticas"><i class="fa-solid fa-chart-simple"></i></button>` : '';
 
-            if (isFinalizadoMatch) {
-                actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
-                actionTitle = 'Planilla Original';
-                actionColorClass = 'bg-blue-500 hover:bg-blue-600';
-            }
+                if (isFinalizadoMatch) {
+                    actionIcon = '<i class="fa-solid fa-clipboard-list"></i>';
+                    actionTitle = 'Planilla Original';
+                    actionColorClass = 'bg-blue-500 hover:bg-blue-600';
+                }
 
-            if (isPast && !isToday) {
-                cardClasses += ' grayscale opacity-70 border-slate-200';
-                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">FINALIZADO</span>';
-            } else if (isNext) {
-                cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg relative z-10 ring-2 ring-amber-400';
-                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">PRÓXIMO PARTIDO</span>';
-            } else if (isToday) {
-                cardClasses += ' border-blue-400 shadow-blue-100 shadow-md';
-                statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">HOY</span>';
-            } else {
-                cardClasses += ' border-slate-200';
-            }
+                if (isPast && !isToday) {
+                    cardClasses += ' grayscale opacity-70 border-slate-200';
+                    statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-200 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">FINALIZADO</span>';
+                } else if (isNext) {
+                    cardClasses += ' border-amber-400 shadow-amber-100 shadow-lg relative z-10 ring-2 ring-amber-400';
+                    statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">PRÓXIMO PARTIDO</span>';
+                } else if (isToday) {
+                    cardClasses += ' border-blue-400 shadow-blue-100 shadow-md';
+                    statusBadge = '<span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm whitespace-nowrap z-30">HOY</span>';
+                } else {
+                    cardClasses += ' border-slate-200';
+                }
 
-            const escudoLocal = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-12 h-12 object-contain" alt="Local">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
-            const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-12 h-12 object-contain" alt="Rival">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+                const escudoLocal = equipoActual?.escudo ? `<img src="${equipoActual.escudo}" class="w-12 h-12 object-contain" alt="Local">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+                const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-12 h-12 object-contain" alt="Rival">` : `<div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
 
-            const nomLocal = equipoActual?.nombre || 'Mi Equipo';
-            const nomRival = par.rival || 'Rival';
+                const nomLocal = equipoActual?.nombre || 'Mi Equipo';
+                const nomRival = par.rival || 'Rival';
 
-            let equipoIzquierdaEscudo, equipoIzquierdaNombre;
-            let equipoDerechaEscudo, equipoDerechaNombre;
+                let equipoIzquierdaEscudo, equipoIzquierdaNombre;
+                let equipoDerechaEscudo, equipoDerechaNombre;
 
-            // Si esLocal es false (visitante), Rival va a la izquierda y Mi Equipo a la derecha
-            if (par.esLocal === false) {
-                equipoIzquierdaEscudo = escudoRivalImg;
-                equipoIzquierdaNombre = nomRival;
-                equipoDerechaEscudo = escudoLocal;
-                equipoDerechaNombre = nomLocal;
-            } else {
-                equipoIzquierdaEscudo = escudoLocal;
-                equipoIzquierdaNombre = nomLocal;
-                equipoDerechaEscudo = escudoRivalImg;
-                equipoDerechaNombre = nomRival;
-            }
+                // Si esLocal es false (visitante), Rival va a la izquierda y Mi Equipo a la derecha
+                if (par.esLocal === false) {
+                    equipoIzquierdaEscudo = escudoRivalImg;
+                    equipoIzquierdaNombre = nomRival;
+                    equipoDerechaEscudo = escudoLocal;
+                    equipoDerechaNombre = nomLocal;
+                } else {
+                    equipoIzquierdaEscudo = escudoLocal;
+                    equipoIzquierdaNombre = nomLocal;
+                    equipoDerechaEscudo = escudoRivalImg;
+                    equipoDerechaNombre = nomRival;
+                }
 
-            const card = document.createElement('div');
-            card.className = cardClasses;
-            card.innerHTML = `
-                ${statusBadge}
-                <div class="absolute top-2 left-2 flex gap-1 z-20">
-                    <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="${actionTitle}">${actionIcon}</button>
-                    ${statsBtn}
-                </div>
-                <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
-                    <button class="require-editor btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
-                    <button class="require-editor btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
-                </div>
+                let fechaFormatted = '-';
+                if (par.fecha) {
+                    if (par.fecha.includes('-')) {
+                        fechaFormatted = par.fecha.split('-').reverse().join('/');
+                    } else {
+                        fechaFormatted = par.fecha;
+                    }
+                }
+
+                const numConvocados = Array.isArray(par.convocados) ? par.convocados.length : 0;
+                const numTitulares = Array.isArray(par.titulares) ? par.titulares.length : 0;
+
+                const card = document.createElement('div');
+                card.className = cardClasses;
+                card.innerHTML = `
+                    ${statusBadge}
+                    <div class="absolute top-2 left-2 flex gap-1 z-20">
+                        <button class="btn-play-par w-8 h-8 ${actionColorClass} text-white rounded-full transition-colors shadow-sm focus:outline-none" data-id="${par.id}" title="${actionTitle}">${actionIcon}</button>
+                        ${statsBtn}
+                    </div>
+                    <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 z-20">
+                        <button class="require-editor btn-edit-par w-8 h-8 bg-blue-50 hover:bg-blue-100 text-blue-500 rounded-full transition-colors" data-id="${par.id}" title="Editar Partido"><i class="fa-solid fa-pen"></i></button>
+                        <button class="require-editor btn-del-par w-8 h-8 bg-red-50 hover:bg-red-100 text-red-500 rounded-full transition-colors" data-id="${par.id}" title="Eliminar Partido"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                    
+                    <div class="text-center font-bold text-slate-500 mb-4 mt-2 text-sm flex justify-center items-center gap-2">
+                        <i class="fa-regular fa-calendar"></i> ${fechaFormatted} &nbsp;|&nbsp; <i class="fa-regular fa-clock"></i> ${par.hora || '--:--'}
+                    </div>
+
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex flex-col items-center flex-1 w-1/3">
+                            ${equipoIzquierdaEscudo}
+                            <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoIzquierdaNombre}</span>
+                        </div>
+                        <div class="font-black text-xl flex-shrink-0 px-4 ${par.resultado ? 'text-blue-600 bg-blue-50 py-1 rounded-lg' : 'text-slate-300'}">${par.resultado || 'VS'}</div>
+                        <div class="flex flex-col items-center flex-1 w-1/3">
+                            ${equipoDerechaEscudo}
+                            <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoDerechaNombre}</span>
+                        </div>
+                    </div>
+
+                    ${par.lugar ? `<div class="text-xs text-slate-500 text-center mb-1"><i class="fa-solid fa-location-dot mr-1"></i> ${par.lugar}</div>` : ''}
+                    ${par.comentarios ? `<div class="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center mt-2 mx-4">${par.comentarios}</div>` : ''}
+
+                    <div class="mt-4 pt-3 border-t text-xs text-slate-500 flex justify-around">
+                        <span><i class="fa-solid fa-clipboard-user border rounded p-1 mb-1 bg-slate-50"></i> Conv: <b>${numConvocados}</b></span>
+                        <span><i class="fa-solid fa-users border rounded p-1 mb-1 bg-slate-50"></i> Tit: <b>${numTitulares}</b></span>
+                    </div>
+                `;
                 
-                <div class="text-center font-bold text-slate-500 mb-4 mt-2 text-sm flex justify-center items-center gap-2">
-                    <i class="fa-regular fa-calendar"></i> ${par.fecha.split('-').reverse().join('/')} &nbsp;|&nbsp; <i class="fa-regular fa-clock"></i> ${par.hora}
-                </div>
-
-                <div class="flex items-center justify-between mb-4">
-                    <div class="flex flex-col items-center flex-1 w-1/3">
-                        ${equipoIzquierdaEscudo}
-                        <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoIzquierdaNombre}</span>
-                    </div>
-                    <div class="font-black text-xl flex-shrink-0 px-4 ${par.resultado ? 'text-blue-600 bg-blue-50 py-1 rounded-lg' : 'text-slate-300'}">${par.resultado || 'VS'}</div>
-                    <div class="flex flex-col items-center flex-1 w-1/3">
-                        ${equipoDerechaEscudo}
-                        <span class="font-bold text-slate-800 text-sm mt-2 text-center line-clamp-1 w-full">${equipoDerechaNombre}</span>
-                    </div>
-                </div>
-
-                ${par.lugar ? `<div class="text-xs text-slate-500 text-center mb-1"><i class="fa-solid fa-location-dot mr-1"></i> ${par.lugar}</div>` : ''}
-                ${par.comentarios ? `<div class="text-xs text-amber-600 bg-amber-50 p-2 rounded text-center mt-2 mx-4">${par.comentarios}</div>` : ''}
-
-                <div class="mt-4 pt-3 border-t text-xs text-slate-500 flex justify-around">
-                    <span><i class="fa-solid fa-clipboard-user border rounded p-1 mb-1 bg-slate-50"></i> Conv: <b>${par.convocados?.length || 0}</b></span>
-                    <span><i class="fa-solid fa-users border rounded p-1 mb-1 bg-slate-50"></i> Tit: <b>${par.titulares?.length || 0}</b></span>
-                </div>
-            `;
-            
-            bindPartidoEvents(card, par, isFinalizadoMatch);
-            contenedor.appendChild(card);
+                bindPartidoEvents(card, par, isFinalizadoMatch);
+                contenedor.appendChild(card);
+            } catch(errPar) {
+                console.error("Error al renderizar tarjeta de partido:", par, errPar);
+            }
         });
     }
 }

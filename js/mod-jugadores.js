@@ -4,9 +4,136 @@ import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 export let todosLosJugadores = [];
 export let equipoIdActivo = null;
 let unsubJugadores = null;
+let radarChartInstance = null;
 
 const contenedor = document.getElementById('lista-jugadores-container');
 let viewMode = localStorage.getItem('plantillaViewMode') || 'cards';
+
+export function actualizarRadarChart(stats = null) {
+    setTimeout(() => {
+        const canvas = document.getElementById('jugador-radar-chart');
+        if (!canvas || !window.Chart) return;
+
+        const ritmo = stats && stats.ritmo !== undefined ? parseInt(stats.ritmo) : (parseInt(document.getElementById('input-jugador-ritmo')?.value) || 50);
+        const tiro = stats && stats.tiro !== undefined ? parseInt(stats.tiro) : (parseInt(document.getElementById('input-jugador-tiro')?.value) || 50);
+        const pase = stats && stats.pase !== undefined ? parseInt(stats.pase) : (parseInt(document.getElementById('input-jugador-pase')?.value) || 50);
+        const regate = stats && stats.regate !== undefined ? parseInt(stats.regate) : (parseInt(document.getElementById('input-jugador-regate')?.value) || 50);
+        const defensa = stats && stats.defensa !== undefined ? parseInt(stats.defensa) : (parseInt(document.getElementById('input-jugador-defensa')?.value) || 50);
+        const fisico = stats && stats.fisico !== undefined ? parseInt(stats.fisico) : (parseInt(document.getElementById('input-jugador-fisico')?.value) || 50);
+
+        const dataValues = [ritmo, tiro, pase, regate, defensa, fisico];
+        const labels = ['Ritmo', 'Tiro', 'Pase', 'Regate', 'Defensa', 'Físico'];
+
+        if (radarChartInstance) {
+            radarChartInstance.data.datasets[0].data = dataValues;
+            radarChartInstance.update();
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
+        radarChartInstance = new window.Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Capacidades',
+                    data: dataValues,
+                    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+                    borderColor: '#10b981',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#10b981',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1.5,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointHoverBackgroundColor: '#ffffff',
+                    pointHoverBorderColor: '#10b981'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 350
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` ${context.label}: ${context.raw}`
+                        }
+                    }
+                },
+                scales: {
+                    r: {
+                        min: 0,
+                        max: 100,
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 20,
+                            display: false,
+                            backdropColor: 'transparent'
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.25)',
+                            circular: false
+                        },
+                        angleLines: {
+                            color: 'rgba(148, 163, 184, 0.35)'
+                        },
+                        pointLabels: {
+                            font: {
+                                size: 11,
+                                weight: 'bold',
+                                family: 'system-ui, -apple-system, sans-serif'
+                            },
+                            color: '#334155'
+                        }
+                    }
+                }
+            }
+        });
+    }, 40);
+}
+
+export function abrirFichaJugador(jug) {
+    document.getElementById('input-jugador-nombre').value = jug.nombre || '';
+    document.getElementById('input-jugador-posicion').value = jug.posicion || 'Delantero';
+    document.getElementById('input-jugador-dorsal').value = jug.dorsal ?? '';
+    document.getElementById('input-jugador-estado').value = jug.estado || 'Disponible';
+    
+    const stats = jug.stats || { media: 50, ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 };
+    document.getElementById('input-jugador-media').value = stats.media ?? 50;
+    document.getElementById('input-jugador-ritmo').value = stats.ritmo ?? 50;
+    document.getElementById('input-jugador-tiro').value = stats.tiro ?? 50;
+    document.getElementById('input-jugador-pase').value = stats.pase ?? 50;
+    document.getElementById('input-jugador-regate').value = stats.regate ?? 50;
+    document.getElementById('input-jugador-defensa').value = stats.defensa ?? 50;
+    document.getElementById('input-jugador-fisico').value = stats.fisico ?? 50;
+
+    if (jug.foto) {
+        document.getElementById('input-jugador-foto-base64').value = jug.foto;
+        document.getElementById('preview-jugador-foto').src = jug.foto;
+        document.getElementById('preview-jugador-foto').classList.remove('hidden');
+        document.getElementById('icon-jugador-foto').classList.add('hidden');
+    } else {
+        document.getElementById('input-jugador-foto-base64').value = "";
+        document.getElementById('preview-jugador-foto').src = "";
+        document.getElementById('preview-jugador-foto').classList.add('hidden');
+        document.getElementById('icon-jugador-foto').classList.remove('hidden');
+    }
+
+    document.getElementById('form-jugador').dataset.editId = jug.id;
+    const modalTitle = document.querySelector('#modal-jugador h3');
+    if (modalTitle) {
+        modalTitle.innerHTML = `<i class="fa-solid fa-address-card text-emerald-600 mr-2"></i> Ficha del Jugador: <span class="text-slate-800">${jug.nombre}</span>`;
+    }
+    document.getElementById('modal-jugador').classList.remove('hidden');
+
+    actualizarRadarChart(stats);
+}
 
 export function setEquipoActivo(id) {
     equipoIdActivo = id;
@@ -73,7 +200,22 @@ export function initJugadores() {
         document.getElementById('preview-jugador-foto').classList.add('hidden');
         document.getElementById('icon-jugador-foto').classList.remove('hidden');
         delete document.getElementById('form-jugador').dataset.editId;
-        document.querySelector('#modal-jugador h3').innerText = "Añadir Jugador";
+        const modalTitle = document.querySelector('#modal-jugador h3');
+        if (modalTitle) modalTitle.innerHTML = `<i class="fa-solid fa-address-card text-emerald-600 mr-2"></i> Ficha del Jugador`;
+        if (radarChartInstance) {
+            radarChartInstance.destroy();
+            radarChartInstance = null;
+        }
+    });
+
+    // Actualización en tiempo real del gráfico radar cuando se modifican los atributos
+    ['input-jugador-ritmo', 'input-jugador-tiro', 'input-jugador-pase', 'input-jugador-regate', 'input-jugador-defensa', 'input-jugador-fisico'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => {
+                actualizarRadarChart();
+            });
+        }
     });
 
     document.getElementById('input-jugador-foto').addEventListener('change', (e) => {
@@ -111,11 +253,15 @@ export function initJugadores() {
     });
 
     document.getElementById('btn-open-modal-jugador').addEventListener('click', () => {
-        if (!document.getElementById('form-jugador').dataset.editId) {
-            document.querySelector('#modal-jugador h3').innerText = "Añadir Jugador";
-        } else {
-            document.querySelector('#modal-jugador h3').innerText = "Editar Jugador";
-        }
+        document.getElementById('form-jugador').reset();
+        document.getElementById('input-jugador-foto-base64').value = "";
+        document.getElementById('preview-jugador-foto').src = "";
+        document.getElementById('preview-jugador-foto').classList.add('hidden');
+        document.getElementById('icon-jugador-foto').classList.remove('hidden');
+        delete document.getElementById('form-jugador').dataset.editId;
+        const modalTitle = document.querySelector('#modal-jugador h3');
+        if (modalTitle) modalTitle.innerHTML = `<i class="fa-solid fa-user-plus text-emerald-600 mr-2"></i> Añadir Jugador`;
+        actualizarRadarChart({ ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 });
     });
 
     document.getElementById('btn-save-modal-jugador').addEventListener('click', async () => {
@@ -189,7 +335,6 @@ function renderizar() {
         const stats = jug.stats || { media: 50, ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 };
         
         if (viewMode === 'table') {
-            // Remove grid classes if present, though we might want to just set class list entirely
             contenedor.className = 'w-full overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm';
             
             if (!contenedor.querySelector('table')) {
@@ -213,7 +358,7 @@ function renderizar() {
 
             const tbody = contenedor.querySelector('#table-jugadores-body');
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition-colors group';
+            tr.className = 'hover:bg-slate-50 transition-colors group cursor-pointer';
             tr.innerHTML = `
                 <td class="px-4 py-3 font-medium text-slate-900 w-16">#${jug.dorsal}</td>
                 <td class="px-4 py-3">
@@ -238,6 +383,7 @@ function renderizar() {
                 </td>
                 <td class="px-4 py-3 text-right">
                     <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="btn-radar-jug w-8 h-8 bg-white hover:bg-emerald-50 text-emerald-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Ficha y Capacidades"><i class="fa-solid fa-chart-pie text-xs"></i></button>
                         <button class="require-editor btn-edit-jug w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                         <button class="require-editor btn-del-jug w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
                     </div>
@@ -248,14 +394,14 @@ function renderizar() {
             tbody.appendChild(tr);
 
         } else {
-            // Restore grid classes
             contenedor.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6';
 
             const card = document.createElement('div');
-            card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden';
+            card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden cursor-pointer';
             card.innerHTML = `
                 <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 pointer-events-none"></div>
                 <div class="absolute top-2 right-2 flex gap-1 z-[20]">
+                    <button class="btn-radar-jug w-7 h-7 bg-white/90 hover:bg-white text-emerald-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Ficha y Capacidades"><i class="fa-solid fa-chart-pie text-xs"></i></button>
                     <button class="require-editor btn-edit-jug w-7 h-7 bg-white/90 hover:bg-white text-blue-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                     <button class="require-editor btn-del-jug w-7 h-7 bg-white/90 hover:bg-white text-rose-600 rounded-full shadow transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
                 </div>
@@ -302,7 +448,33 @@ function renderizar() {
 }
 
 function bindCardEvents(element, jug, stats) {
-    element.querySelector('.btn-del-jug').addEventListener('click', async (e) => {
+    // Abrir ficha al hacer clic en el botón de radar o editar
+    const btnRadar = element.querySelector('.btn-radar-jug');
+    if (btnRadar) {
+        btnRadar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirFichaJugador(jug);
+        });
+    }
+
+    const btnEdit = element.querySelector('.btn-edit-jug');
+    if (btnEdit) {
+        btnEdit.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirFichaJugador(jug);
+        });
+    }
+
+    // Abrir ficha al hacer clic en la tarjeta o fila completa
+    element.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-del-jug') || e.target.closest('.btn-edit-jug') || e.target.closest('.btn-radar-jug')) return;
+        abrirFichaJugador(jug);
+    });
+
+    const btnDel = element.querySelector('.btn-del-jug');
+    if (btnDel) {
+        btnDel.addEventListener('click', async (e) => {
+            e.stopPropagation();
             if (await confirmarAccion('¿Eliminar jugador de forma permanente?')) {
                 try {
                     await deleteDoc(doc(db, 'jugadores', jug.id));
@@ -312,36 +484,5 @@ function bindCardEvents(element, jug, stats) {
                 }
             }
         });
-
-        element.querySelector('.btn-edit-jug').addEventListener('click', (e) => {
-            document.getElementById('input-jugador-nombre').value = jug.nombre;
-            document.getElementById('input-jugador-posicion').value = jug.posicion;
-            document.getElementById('input-jugador-dorsal').value = jug.dorsal;
-            document.getElementById('input-jugador-estado').value = jug.estado;
-            
-            const stats = jug.stats || { media:50, ritmo:50, tiro:50, pase:50, regate:50, defensa:50, fisico:50 };
-            document.getElementById('input-jugador-media').value = stats.media;
-            document.getElementById('input-jugador-ritmo').value = stats.ritmo;
-            document.getElementById('input-jugador-tiro').value = stats.tiro;
-            document.getElementById('input-jugador-pase').value = stats.pase;
-            document.getElementById('input-jugador-regate').value = stats.regate;
-            document.getElementById('input-jugador-defensa').value = stats.defensa;
-            document.getElementById('input-jugador-fisico').value = stats.fisico;
-
-            if (jug.foto) {
-                document.getElementById('input-jugador-foto-base64').value = jug.foto;
-                document.getElementById('preview-jugador-foto').src = jug.foto;
-                document.getElementById('preview-jugador-foto').classList.remove('hidden');
-                document.getElementById('icon-jugador-foto').classList.add('hidden');
-            } else {
-                document.getElementById('input-jugador-foto-base64').value = "";
-                document.getElementById('preview-jugador-foto').src = "";
-                document.getElementById('preview-jugador-foto').classList.add('hidden');
-                document.getElementById('icon-jugador-foto').classList.remove('hidden');
-            }
-
-            document.getElementById('form-jugador').dataset.editId = jug.id;
-            document.querySelector('#modal-jugador h3').innerText = "Editar Jugador";
-            document.getElementById('modal-jugador').classList.remove('hidden');
-        });
+    }
 }
