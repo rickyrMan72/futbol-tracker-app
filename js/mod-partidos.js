@@ -1,5 +1,5 @@
 import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, query, where, auth, getDoc } from './firebase-config.js';
-import { mostrarNotificacion, bindModal, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesAsc, compararEfemeridesDesc, formatearTiempoAnotado } from './ui.js';
+import { mostrarNotificacion, bindModal, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesAsc, compararEfemeridesDesc, formatearTiempoAnotado, renderTop3CardHTML } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL } from './mod-directo.js';
@@ -426,7 +426,7 @@ function dibujarPartidos() {
     const idProximo = partidosFuturos.length > 0 ? partidosFuturos[0].id : null;
 
     try {
-        actualizarDashboardUltimoPartido(partidosEquipo, ahora);
+        actualizarEstadisticasDashboard(partidosEquipo, ahora);
     } catch(e) {
         console.warn("Error al actualizar dashboard:", e);
     }
@@ -808,7 +808,7 @@ async function abrirEstadisticas(par) {
     
     const titulares = par.titulares || [];
     titulares.forEach(id => {
-        statsJugadores[id] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, pos: 0, neg: 0, scoreValor: 0, entrada: 0, salida: null };
+        statsJugadores[id] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: 0, salida: null };
     });
     
     const minFinal = par.cronometro && par.cronometro.tiempoAcumulado ? Math.floor(par.cronometro.tiempoAcumulado / 60000) : 90;
@@ -898,14 +898,33 @@ async function abrirEstadisticas(par) {
                 }
             }
         }
+        if (ef.jugadorId && !statsJugadores[ef.jugadorId]) {
+            statsJugadores[ef.jugadorId] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: null, salida: null };
+        }
+
+        const eTipoStr = (eTipo || '').toLowerCase();
+        const accNomStr = (accNombre || '').toLowerCase();
+
         if (eTipo === 'asistencia') {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].asis++;
         }
-        if (eTipo === 'tiro-puerta') {
+        if (eTipoStr === 'tiro-puerta' || accNomStr.includes('tiro a puerta')) {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].tPuerta++;
         }
-        if (eTipo === 'tiro-fuera') {
+        if (eTipoStr === 'tiro-fuera' || accNomStr.includes('tiro fuera')) {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].tFuera++;
+        }
+        if (eTipoStr === 'falta-recibida' || accNomStr.includes('falta recibida')) {
+            if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].faltasRecibidas++;
+        }
+        if (eTipoStr === 'falta-cometida' || accNomStr.includes('falta cometida')) {
+            if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].faltasCometidas++;
+        }
+        if (eTipoStr === 'amarilla' || eTipoStr === 'tarjeta-amarilla' || accNomStr.includes('amarilla')) {
+            if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].amarillas++;
+        }
+        if (eTipoStr === 'roja' || eTipoStr === 'tarjeta-roja' || accNomStr.includes('roja')) {
+            if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].rojas++;
         }
         
         if (eTipo === 'sustitucion' || eTipo === 'sustitucion-lesion') {
@@ -965,6 +984,28 @@ async function abrirEstadisticas(par) {
             <div class="text-3xl font-black text-purple-500">${totalAcciones > 0 ? Math.round((positivas/totalAcciones)*100) : 0}%</div>
         </div>
     `;
+
+    const getTop3Partido = (metricKey) => {
+        return Object.keys(statsJugadores).map(id => {
+            const jug = todosLosJugadores.find(j => j.id === id);
+            return {
+                id,
+                nombre: jug ? jug.nombre : 'Desconocido',
+                dorsal: jug?.dorsal || '',
+                valor: statsJugadores[id][metricKey] || 0
+            };
+        }).filter(p => p.valor > 0).sort((a,b) => b.valor - a.valor).slice(0, 3);
+    };
+
+    const containerTop3Stats = document.getElementById('stats-top3-container');
+    if (containerTop3Stats) {
+        containerTop3Stats.innerHTML = [
+            renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3Partido('faltasRecibidas')),
+            renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3Partido('faltasCometidas')),
+            renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3Partido('tPuerta')),
+            renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3Partido('tFuera'))
+        ].join('');
+    }
     
     const jugListHTML = Object.keys(statsJugadores).map(id => {
         const jug = todosLosJugadores.find(j => j.id === id);
@@ -1575,67 +1616,228 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
     modal.classList.remove('hidden');
 }
 
-async function actualizarDashboardUltimoPartido(partidos, ahora) {
-    const card = document.getElementById('dash-chart-card');
-    if (!card) return;
-    
-    // Buscar ultimo partido finalizado
-    const hoyStr = ahora.toISOString().split('T')[0];
-    const finalizados = partidos.filter(p => p.cronometro?.periodo === 'Finalizado' || (new Date(`${p.fecha}T${p.hora}`) < ahora && p.fecha !== hoyStr));
-    if (finalizados.length === 0) {
-        card.classList.add('hidden');
-        return;
+export async function actualizarEstadisticasDashboard(partidos, ahora = new Date()) {
+    const cardChart = document.getElementById('dash-chart-card');
+    const badgePartidos = document.getElementById('dash-partidos-count-badge');
+    const containerTop3 = document.getElementById('dash-top3-container');
+    const containerTarjetas = document.getElementById('dash-tarjetas-container');
+
+    const numPartidosTotal = partidos ? partidos.length : 0;
+    if (badgePartidos) {
+        badgePartidos.innerText = `${numPartidosTotal} partido${numPartidosTotal === 1 ? '' : 's'}`;
     }
-    
-    // Sort by date descending
-    finalizados.sort((a,b) => new Date(`${b.fecha}T${b.hora}`) - new Date(`${a.fecha}T${a.hora}`));
-    const ultimo = finalizados[0];
-    const partidosParaMedia = finalizados.slice(0, 20); // max 20 matches for average
-    
-    document.getElementById('dash-chart-title').innerText = `Último Partido: ${ultimo.esLocal === false ? ultimo.rival + ' - Mi Eq.' : 'Mi Eq. - ' + ultimo.rival}`;
-    
+
+    // Inicializar acumulación global de jugadores del equipo activo
+    const eqId = equipoIdActivo;
+    const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === eqId);
+    let statsGlobales = {};
+    jugadoresEquipo.forEach(j => {
+        statsGlobales[j.id] = {
+            id: j.id,
+            nombre: j.nombre,
+            dorsal: j.dorsal || '',
+            posicion: j.posicion || '',
+            faltasRecibidas: 0,
+            faltasCometidas: 0,
+            tPuerta: 0,
+            tFuera: 0,
+            amarillas: 0,
+            rojas: 0
+        };
+    });
+
     try {
+        // Fetch efemérides de todos los partidos del equipo
+        const efemPromises = (partidos || []).map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')));
+        const snaps = await Promise.all(efemPromises);
+
         let distribucionUltimo = {};
         let distribucionTodos = {};
-        
-        const efemPromises = partidosParaMedia.map(p => {
-            const q = collection(db, 'partidos', p.id, 'efemerides');
-            return getDocs(q);
-        });
-        const snaps = await Promise.all(efemPromises);
-        
-        snaps.forEach((snap, i) => {
-            const esUltimo = i === 0;
-            const partidoActual = partidosParaMedia[i];
-            const pConfigAcc = partidoActual.configAcciones || DEFAULT_ACCIONES; // Need DEFAULT_ACCIONES to be available, it is from config if imported, but we can fall back to [] if not
-            
+
+        // Identificar último partido finalizado para el gráfico
+        const hoyStr = ahora.toISOString().split('T')[0];
+        const finalizados = (partidos || []).filter(p => p.cronometro?.periodo === 'Finalizado' || (new Date(`${p.fecha}T${p.hora}`) < ahora && p.fecha !== hoyStr));
+        finalizados.sort((a,b) => new Date(`${b.fecha}T${b.hora}`) - new Date(`${a.fecha}T${a.hora}`));
+        const ultimoPartido = finalizados[0];
+
+        snaps.forEach((snap, idx) => {
+            const partidoActual = partidos[idx];
+            const esUltimo = ultimoPartido && partidoActual.id === ultimoPartido.id;
+            const pConfigAcc = partidoActual.configAcciones || DEFAULT_ACCIONES;
+
             snap.forEach(d => {
                 const data = d.data();
-                const eTipo = data.tipo || data.accionId;
+                const jId = data.jugadorId;
+                const eTipo = (data.tipo || data.accionId || '').toLowerCase();
                 const accInfo = pConfigAcc ? pConfigAcc.find(a => a.id === eTipo) : null;
                 const accNombre = data.nombre || (accInfo ? accInfo.nombre : eTipo);
-                
+
                 if (accInfo || accNombre) {
                     if (esUltimo) {
                         distribucionUltimo[accNombre] = (distribucionUltimo[accNombre] || 0) + 1;
                     }
                     distribucionTodos[accNombre] = (distribucionTodos[accNombre] || 0) + 1;
                 }
+
+                if (jId) {
+                    if (!statsGlobales[jId]) {
+                        const jug = todosLosJugadores.find(x => x.id === jId);
+                        statsGlobales[jId] = {
+                            id: jId,
+                            nombre: data.jugadorNombre || jug?.nombre || 'Desconocido',
+                            dorsal: data.jugadorDorsal || jug?.dorsal || '',
+                            posicion: jug?.posicion || '',
+                            faltasRecibidas: 0,
+                            faltasCometidas: 0,
+                            tPuerta: 0,
+                            tFuera: 0,
+                            amarillas: 0,
+                            rojas: 0
+                        };
+                    }
+
+                    const sg = statsGlobales[jId];
+                    const nomStr = (data.nombre || '').toLowerCase();
+
+                    if (eTipo === 'falta-recibida' || nomStr.includes('falta recibida')) {
+                        sg.faltasRecibidas++;
+                    } else if (eTipo === 'falta-cometida' || nomStr.includes('falta cometida')) {
+                        sg.faltasCometidas++;
+                    } else if (eTipo === 'tiro-puerta' || nomStr.includes('tiro a puerta')) {
+                        sg.tPuerta++;
+                    } else if (eTipo === 'tiro-fuera' || nomStr.includes('tiro fuera')) {
+                        sg.tFuera++;
+                    } else if (eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || nomStr.includes('amarilla')) {
+                        sg.amarillas++;
+                    } else if (eTipo === 'roja' || eTipo === 'tarjeta-roja' || nomStr.includes('roja')) {
+                        sg.rojas++;
+                    }
+                }
             });
         });
-        
-        const numPartidos = partidosParaMedia.length;
-        // Solo mostrar labels que estén en el último partido, o en la media si se desea.
-        // Mostrar todos los que tengan datos en el ultimo partido, para que el foco sea ese partido, plus maybe some common ones.
-        // Let's include everything that has > 0 in distributing Último, and the top from distribuionTodos
+
+        // 1. Render Top 3 en Dashboard
+        if (containerTop3) {
+            const getTop3 = (key) => Object.values(statsGlobales)
+                .filter(p => p[key] > 0)
+                .sort((a, b) => b[key] - a[key])
+                .slice(0, 3)
+                .map(p => ({
+                    id: p.id,
+                    nombre: p.nombre,
+                    dorsal: p.dorsal,
+                    valor: p[key]
+                }));
+
+            containerTop3.innerHTML = [
+                renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3('faltasRecibidas')),
+                renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3('faltasCometidas')),
+                renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3('tPuerta')),
+                renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'))
+            ].join('');
+        }
+
+        // 2. Render Tabla de Tarjetas y Disciplina en Dashboard
+        if (containerTarjetas) {
+            const jugadoresConTarjetas = Object.values(statsGlobales)
+                .filter(p => p.amarillas > 0 || p.rojas > 0)
+                .sort((a, b) => (b.rojas * 3 + b.amarillas) - (a.rojas * 3 + a.amarillas));
+
+            if (jugadoresConTarjetas.length === 0) {
+                containerTarjetas.innerHTML = `
+                    <div class="flex flex-col items-center justify-center py-8 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <div class="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl mb-2">
+                            <i class="fa-solid fa-shield-heart"></i>
+                        </div>
+                        <p class="font-bold text-slate-700 text-sm">¡Fair Play Impecable!</p>
+                        <p class="text-xs text-slate-500 mt-0.5">Ningún jugador tiene tarjetas amarillas o rojas registradas en los partidos del equipo.</p>
+                    </div>
+                `;
+            } else {
+                containerTarjetas.innerHTML = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-500 uppercase bg-slate-50 whitespace-nowrap">
+                                <tr>
+                                    <th class="px-4 py-2.5 rounded-l-lg font-bold">Jugador</th>
+                                    <th class="px-3 py-2.5 text-center font-bold">
+                                        <span class="inline-flex items-center gap-1.5 text-amber-600">
+                                            <span class="w-3 h-4 bg-amber-400 rounded-xs border border-amber-500 shadow-xs inline-block"></span> Amarillas
+                                        </span>
+                                    </th>
+                                    <th class="px-3 py-2.5 text-center font-bold">
+                                        <span class="inline-flex items-center gap-1.5 text-rose-600">
+                                            <span class="w-3 h-4 bg-rose-600 rounded-xs border border-rose-700 shadow-xs inline-block"></span> Rojas
+                                        </span>
+                                    </th>
+                                    <th class="px-3 py-2.5 text-center font-bold text-slate-700">Total Tarjetas</th>
+                                    <th class="px-4 py-2.5 rounded-r-lg text-center font-bold">Estado / Sanción</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 whitespace-nowrap">
+                                ${jugadoresConTarjetas.map(j => {
+                                    let badgeEstado = '<span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md text-[11px] font-medium">Activo</span>';
+                                    if (j.amarillas >= 5) {
+                                        badgeEstado = `<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md text-[11px] font-bold">Ciclo cumplido (${Math.floor(j.amarillas / 5)})</span>`;
+                                    } else if (j.amarillas === 4) {
+                                        badgeEstado = '<span class="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-md text-[11px] font-bold animate-pulse">Apercibido (4)</span>';
+                                    } else if (j.rojas > 0) {
+                                        badgeEstado = `<span class="px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md text-[11px] font-bold">Expulsión (${j.rojas})</span>`;
+                                    }
+                                    return `
+                                        <tr class="hover:bg-slate-50 transition-colors">
+                                            <td class="px-4 py-2.5">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                                        ${j.dorsal || '-'}
+                                                    </span>
+                                                    <div>
+                                                        <span class="font-bold text-slate-800 text-sm">${j.nombre}</span>
+                                                        ${j.posicion ? `<span class="text-xs text-slate-400 ml-1">(${j.posicion})</span>` : ''}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-3 py-2.5 text-center">
+                                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full ${j.amarillas > 0 ? 'bg-amber-100 text-amber-800 font-black' : 'text-slate-400'} text-xs">
+                                                    ${j.amarillas}
+                                                </span>
+                                            </td>
+                                            <td class="px-3 py-2.5 text-center">
+                                                <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full ${j.rojas > 0 ? 'bg-rose-100 text-rose-800 font-black' : 'text-slate-400'} text-xs">
+                                                    ${j.rojas}
+                                                </span>
+                                            </td>
+                                            <td class="px-3 py-2.5 text-center font-black text-slate-800 text-sm">
+                                                ${j.amarillas + j.rojas}
+                                            </td>
+                                            <td class="px-4 py-2.5 text-center">
+                                                ${badgeEstado}
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+
+        // 3. Render Gráfico de Rendimiento (si hay último partido)
+        if (!cardChart) return;
+        if (!ultimoPartido) {
+            cardChart.classList.add('hidden');
+            return;
+        }
+
+        document.getElementById('dash-chart-title').innerText = `Último Partido: ${ultimoPartido.esLocal === false ? ultimoPartido.rival + ' - Mi Eq.' : 'Mi Eq. - ' + ultimoPartido.rival}`;
+
+        const numPartidosMedia = finalizados.slice(0, 20).length || 1;
         let allKeys = Array.from(new Set([...Object.keys(distribucionUltimo), ...Object.keys(distribucionTodos)]));
-        
-        // Filter out keys that have 0 in the last match and very few in average, to keep the chart readable
-        allKeys = allKeys.filter(k => (distribucionUltimo[k] || 0) > 0 || ((distribucionTodos[k] || 0) / numPartidos) >= 0.5);
-        
+        allKeys = allKeys.filter(k => (distribucionUltimo[k] || 0) > 0 || ((distribucionTodos[k] || 0) / numPartidosMedia) >= 0.5);
+
         if (allKeys.length > 0) {
-            card.classList.remove('hidden');
-            
+            cardChart.classList.remove('hidden');
             const canvas = document.getElementById('rendimientoChart');
             if (window.dashChartInstance) window.dashChartInstance.destroy();
             
@@ -1650,7 +1852,7 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
                     });
                 } catch(e) {}
             }
-            
+
             if (window.Chart) {
                 window.dashChartInstance = new Chart(canvas, {
                     type: 'bar',
@@ -1667,8 +1869,8 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
                                 order: 2
                             },
                             {
-                                label: `Media (${numPartidos} part.)`,
-                                data: allKeys.map(k => Number(((distribucionTodos[k] || 0) / numPartidos).toFixed(1))),
+                                label: `Media (${numPartidosMedia} part.)`,
+                                data: allKeys.map(k => Number(((distribucionTodos[k] || 0) / numPartidosMedia).toFixed(1))),
                                 type: 'line',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 borderColor: 'rgb(59, 130, 246)',
@@ -1695,10 +1897,10 @@ async function actualizarDashboardUltimoPartido(partidos, ahora) {
                 });
             }
         } else {
-            card.classList.add('hidden');
+            cardChart.classList.add('hidden');
         }
     } catch (e) {
         console.error("No se pudieron cargar estadisticas del dashboard:", e);
-        card.classList.add('hidden');
+        if (cardChart) cardChart.classList.add('hidden');
     }
 }

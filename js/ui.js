@@ -201,3 +201,55 @@ export function compararEfemeridesAsc(a, b) {
 export function compararEfemeridesDesc(a, b) {
     return compararEfemeridesAsc(b, a);
 }
+
+export function renderTop3CardHTML(titulo, iconClass, colorClass, bgLightClass, items, suffix = '') {
+    const medallas = [
+        { badge: '1º', bg: 'bg-amber-100 text-amber-800 border-amber-300' },
+        { badge: '2º', bg: 'bg-slate-100 text-slate-700 border-slate-300' },
+        { badge: '3º', bg: 'bg-orange-100 text-orange-800 border-orange-300' }
+    ];
+
+    let itemsHtml = '';
+    if (!items || items.length === 0) {
+        itemsHtml = `
+            <div class="py-4 text-center text-slate-400">
+                <i class="fa-regular fa-folder-open text-base mb-1 opacity-50 block"></i>
+                <span class="text-xs italic">Sin registros</span>
+            </div>
+        `;
+    } else {
+        itemsHtml = `
+            <div class="space-y-1.5">
+                ${items.map((item, idx) => {
+                    const m = medallas[idx] || medallas[2];
+                    return `
+                        <div class="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
+                            <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                <span class="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center font-black text-[10px] sm:text-[11px] border ${m.bg} shrink-0">
+                                    ${m.badge}
+                                </span>
+                                <span class="font-bold text-xs text-slate-800 truncate" title="${item.nombre}">
+                                    ${item.dorsal ? '#' + item.dorsal + ' ' : ''}${item.nombre}
+                                </span>
+                            </div>
+                            <span class="ml-2 font-black text-xs sm:text-sm px-2 py-0.5 rounded-md ${bgLightClass} ${colorClass} shrink-0">
+                                ${item.valor} ${suffix}
+                            </span>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    return `
+        <div class="bg-white rounded-xl border border-slate-100 shadow-xs p-3 sm:p-4 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2.5 border-b border-slate-100 pb-2">
+                <h5 class="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5 truncate">
+                    <i class="fa-solid ${iconClass} ${colorClass}"></i> <span class="truncate">${titulo}</span>
+                </h5>
+            </div>
+            ${itemsHtml}
+        </div>
+    `;
+}
