@@ -758,7 +758,12 @@
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full break-inside-avoid" id="stats-timeline-panel">
                     <div class="flex justify-between items-center mb-3 border-b pb-2">
                         <h4 class="font-bold text-slate-700">Timeline del Partido</h4>
-                        <button id="btn-add-accion-stats" class="require-editor px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"><i class="fa-solid fa-plus"></i> Añadir Acción</button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btn-toggle-orden-stats" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs" title="Cambiar orden cronológico">
+                                <i class="fa-solid fa-arrow-down-1-9 text-blue-600" id="icon-orden-stats"></i> <span id="lbl-orden-stats">1' ➔ 90'</span>
+                            </button>
+                            <button id="btn-add-accion-stats" class="require-editor px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"><i class="fa-solid fa-plus"></i> Añadir Acción</button>
+                        </div>
                     </div>
                     <div class="overflow-y-auto max-h-[400px] flex-1 pr-2 pl-4 py-2" id="stats-timeline-scroll">
                         <div class="relative space-y-4 border-l-2 border-slate-200 py-2" id="stats-timeline-container">
@@ -849,13 +854,20 @@
                     </select>
                 </div>
 
-                <!-- Tiempo: Minuto y Periodo -->
-                <div class="grid grid-cols-2 gap-3">
+                <!-- Tiempo: Minuto, Segundo y Periodo -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                        <label for="input-accion-minuto" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Minuto de Juego</label>
+                        <label for="input-accion-minuto" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Minuto</label>
                         <div class="relative">
-                            <input type="number" id="input-accion-minuto" min="0" max="130" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold">
-                            <span class="absolute right-3 top-2 text-slate-400 text-sm font-bold">'</span>
+                            <input type="number" id="input-accion-minuto" min="0" max="130" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm pr-7 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold">
+                            <span class="absolute right-2.5 top-2 text-slate-400 text-sm font-bold">'</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="input-accion-segundo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Segundo</label>
+                        <div class="relative">
+                            <input type="number" id="input-accion-segundo" min="0" max="59" value="0" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm pr-7 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold">
+                            <span class="absolute right-2.5 top-2 text-slate-400 text-sm font-bold">"</span>
                         </div>
                     </div>
                     <div>

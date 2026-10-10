@@ -126,3 +126,78 @@ export function initNavigation() {
 export function initChart() {
     // Chart initialization will be dynamic based on last match
 }
+
+export function getPeriodoOrder(periodo, minuto = 0) {
+    if (!periodo) {
+        if (minuto > 90) return 4;
+        if (minuto > 45) return 3;
+        return 1;
+    }
+    const p = String(periodo).toLowerCase().trim();
+    if (p.includes('1') && (p.includes('parte') || p.includes('tiempo'))) return 1;
+    if (p.includes('descanso')) return 2;
+    if (p.includes('2') && (p.includes('parte') || p.includes('tiempo'))) return 3;
+    if (p.includes('prórroga 1') || p.includes('prorroga 1') || (p.includes('prórroga') && p.includes('1')) || (p.includes('prorroga') && p.includes('1'))) return 4;
+    if (p.includes('prórroga 2') || p.includes('prorroga 2') || (p.includes('prórroga') && p.includes('2')) || (p.includes('prorroga') && p.includes('2'))) return 5;
+    if (p.includes('penalti')) return 6;
+    if (p.includes('finalizado')) return 7;
+    return 1;
+}
+
+export function formatearTiempoAnotado(min, sec) {
+    const m = String(Math.max(0, parseInt(min, 10) || 0)).padStart(2, '0');
+    const s = String(Math.max(0, Math.min(59, parseInt(sec, 10) || 0))).padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+export function extraerTiempoEfemeride(ef) {
+    if (!ef) return { min: 0, sec: 0, totalSegundos: 0, periodoOrder: 1 };
+    
+    let min = 0;
+    let sec = 0;
+    
+    if (ef.minuto !== undefined && ef.minuto !== null && !isNaN(ef.minuto)) {
+        min = parseInt(ef.minuto, 10) || 0;
+    } else if (ef.tiempoAnotado && typeof ef.tiempoAnotado === 'string' && ef.tiempoAnotado.includes(':')) {
+        const parts = ef.tiempoAnotado.split(':');
+        min = parseInt(parts[0], 10) || 0;
+    } else if (ef.minutoMs !== undefined && ef.minutoMs !== null && !isNaN(ef.minutoMs)) {
+        min = Math.floor(ef.minutoMs / 60000);
+    }
+    
+    if (ef.segundo !== undefined && ef.segundo !== null && !isNaN(ef.segundo)) {
+        sec = parseInt(ef.segundo, 10) || 0;
+    } else if (ef.tiempoAnotado && typeof ef.tiempoAnotado === 'string' && ef.tiempoAnotado.includes(':')) {
+        const parts = ef.tiempoAnotado.split(':');
+        sec = parseInt(parts[1], 10) || 0;
+    } else if (ef.minutoMs !== undefined && ef.minutoMs !== null && !isNaN(ef.minutoMs)) {
+        sec = Math.floor((ef.minutoMs % 60000) / 1000);
+    }
+    
+    const periodoOrder = getPeriodoOrder(ef.periodo, min);
+    const totalSegundos = (min * 60) + sec;
+    
+    return { min, sec, totalSegundos, periodoOrder };
+}
+
+export function compararEfemeridesAsc(a, b) {
+    const tA = extraerTiempoEfemeride(a);
+    const tB = extraerTiempoEfemeride(b);
+    
+    // Comparar por orden de periodo
+    if (tA.periodoOrder !== tB.periodoOrder) {
+        return tA.periodoOrder - tB.periodoOrder;
+    }
+    
+    // Si están en el mismo periodo, comparar por segundos totales dentro del partido
+    if (tA.totalSegundos !== tB.totalSegundos) {
+        return tA.totalSegundos - tB.totalSegundos;
+    }
+    
+    // Desempate por timestamp
+    return (a.timestamp || 0) - (b.timestamp || 0);
+}
+
+export function compararEfemeridesDesc(a, b) {
+    return compararEfemeridesAsc(b, a);
+}

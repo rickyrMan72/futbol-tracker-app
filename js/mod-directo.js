@@ -1,5 +1,5 @@
 import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, auth, query, where } from './firebase-config.js';
-import { mostrarNotificacion, confirmarAccion } from './ui.js';
+import { mostrarNotificacion, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesDesc, formatearTiempoAnotado } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
 import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
 import { todosLosEquipos } from './mod-equipos.js';
@@ -203,13 +203,19 @@ export function initDirecto() {
 
             if (shouldAdd) {
                 const msActuales = calcularMsActuales();
+                const totalSecs = Math.floor(msActuales / 1000);
+                const min = Math.floor(totalSecs / 60);
+                const sec = totalSecs % 60;
+                const tiempoStr = formatoCrono(msActuales);
                 try {
                     await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
                         tipo: accionObj.id,
                         nombre: accionObj.nombre,
                         icon: accionObj.icon,
                         color: accionObj.color,
-                        tiempoAnotado: formatoCrono(msActuales),
+                        minuto: min,
+                        segundo: sec,
+                        tiempoAnotado: tiempoStr,
                         minutoMs: msActuales,
                         periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
                         timestamp: Date.now(),
@@ -320,7 +326,7 @@ function abrirDirecto(id) {
         unsubEfemerides = onSnapshot(qEfem, (snapshot) => {
             efemeridesList = [];
             snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
-            efemeridesList.sort((a,b) => b.timestamp - a.timestamp); // Mas recientes primero
+            efemeridesList.sort(compararEfemeridesDesc); // Mas recientes en el partido primero
             renderEfemerides();
         }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
     }
@@ -895,6 +901,10 @@ async function registrarEfemeride(accDef, extraData = {}) {
     if (!jInfo) return;
 
     const msActuales = calcularMsActuales();
+    const totalSecs = Math.floor(msActuales / 1000);
+    const min = Math.floor(totalSecs / 60);
+    const sec = totalSecs % 60;
+    const tiempoStr = formatoCrono(msActuales);
     
     const e = {
         tipo: accDef.id,
@@ -902,7 +912,9 @@ async function registrarEfemeride(accDef, extraData = {}) {
         jugadorId: jInfo.id,
         jugadorNombre: jInfo.nombre,
         jugadorDorsal: jInfo.dorsal,
-        tiempoAnotado: formatoCrono(msActuales),
+        minuto: min,
+        segundo: sec,
+        tiempoAnotado: tiempoStr,
         minutoMs: msActuales,
         periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
         timestamp: Date.now(),
@@ -1056,10 +1068,13 @@ function renderEfemerides() {
             desc += ` <i class="fa-solid fa-arrow-right-long text-slate-400 mx-2"></i> <span class="font-bold text-slate-800">#${e.jugadorEntraDorsal} ${e.jugadorEntraNombre}</span>`;
         }
 
+        const tInfo = extraerTiempoEfemeride(e);
+        const displayTiempo = e.tiempoAnotado || formatearTiempoAnotado(tInfo.min, tInfo.sec);
+
         return `
             <div class="flex items-center gap-2 sm:gap-3 p-1.5 sm:p-2 bg-white/80 border border-slate-100 rounded-lg shadow-sm group hover:bg-white transition-colors">
                 <div class="text-[10px] sm:text-xs font-bold text-slate-400 w-10 sm:w-12 text-center shrink-0">
-                    <div>${e.tiempoAnotado}</div>
+                    <div>${displayTiempo}</div>
                     <div class="text-[8px] sm:text-[9px] uppercase leading-none mt-0.5">${e.periodo}</div>
                 </div>
                 <div class="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-slate-50 flex items-center justify-center shrink-0">

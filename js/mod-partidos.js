@@ -1,5 +1,5 @@
 import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, query, where, auth, getDoc } from './firebase-config.js';
-import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
+import { mostrarNotificacion, bindModal, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesAsc, compararEfemeridesDesc, formatearTiempoAnotado } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL } from './mod-directo.js';
@@ -795,7 +795,7 @@ async function abrirEstadisticas(par) {
         console.error("Error fetching efemerides:", e);
     }
     
-    efemerides.sort((a,b) => a.timestamp - b.timestamp);
+    efemerides.sort(compararEfemeridesAsc);
     const configAcc = par.configAcciones || DEFAULT_ACCIONES;
     
     // Procesar estadisticas
@@ -986,74 +986,106 @@ async function abrirEstadisticas(par) {
     }).join('');
     document.getElementById('stats-players-list').innerHTML = jugListHTML || `<tr><td colspan="7" class="p-4 text-center text-slate-500 text-sm">No hay datos de jugadores</td></tr>`;
     
-    const tlHTML = efemerides.map(ef => {
-         const eTipo = ef.tipo || ef.accionId;
-         const acc = configAcc.find(a => a.id === eTipo);
-         const icon = ef.icon || (acc ? acc.icon : 'fa-bolt');
-         const cl = ef.color || (acc ? acc.color : 'text-slate-500');
-         const text = ef.nombre || (acc ? acc.nombre : eTipo);
-         
-         let minText = ef.tiempoAnotado || (ef.minuto ? ef.minuto + "'" : "?'");
-         let subText = ef.jugadorNombre || '';
-         if (!subText) {
-             const jug = todosLosJugadores.find(j => j.id === ef.jugadorId);
-             subText = jug ? jug.nombre : '';
-         }
-         
-         if (ef.jugadorEntraId || ef.jugadorEntraNombre) {
-              const nombreEntra = ef.jugadorEntraNombre || todosLosJugadores.find(j => j.id === ef.jugadorEntraId)?.nombre || '';
-              subText += ` <i class="fa-solid fa-arrow-right-long text-slate-400 mx-1"></i> ${nombreEntra}`;
-         }
-         
-         return `
-             <div class="relative pl-6">
-                <div class="absolute -left-[13px] bg-white border-2 border-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-[10px] ${cl} z-10 mt-1"><i class="fa-solid ${icon}"></i></div>
-                <div class="bg-white border rounded-lg p-2 text-sm shadow-sm hover:shadow transition-shadow flex items-start justify-between">
-                    <div class="flex-1 min-w-0 pr-2">
-                        <span class="font-bold text-slate-700">${minText}</span> - <span class="font-semibold ${cl}">${text}</span>
-                        ${subText ? `<div class="text-xs text-slate-500 mt-1"><i class="fa-regular fa-user mr-1"></i> ${subText}</div>` : ''}
-                        ${ef.nota ? `<div class="text-xs text-slate-400 italic mt-0.5"><i class="fa-regular fa-comment mr-1"></i> ${ef.nota}</div>` : ''}
-                    </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                        <button class="require-editor btn-edit-efemeride-stats text-slate-400 hover:text-blue-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Editar Acción"><i class="fa-solid fa-pen text-xs"></i></button>
-                        <button class="require-editor btn-del-efemeride-stats text-slate-400 hover:text-rose-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Eliminar Acción"><i class="fa-solid fa-trash text-xs"></i></button>
-                    </div>
-                </div>
-             </div>
-         `;
-    }).reverse().join('');
-    
-    const statsTlContainer = document.getElementById('stats-timeline-container');
-    statsTlContainer.innerHTML = tlHTML || `<div class="text-slate-500 text-sm text-center mt-4">No hay eventos registrados</div>`;
+    let ordenTimelineStats = localStorage.getItem('statsTimelineOrder') || 'asc';
 
-    statsTlContainer.querySelectorAll('.btn-edit-efemeride-stats').forEach(btn => {
-        btn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            const id = ev.currentTarget.getAttribute('data-id');
-            const efTarget = efemerides.find(e => e.id === id);
-            if (efTarget) {
-                abrirModalAccionPartido(par, efTarget, () => abrirEstadisticas(par));
-            }
-        });
-    });
+    const renderStatsTimeline = () => {
+        const statsTlContainer = document.getElementById('stats-timeline-container');
+        if (!statsTlContainer) return;
+        
+        const sortedEfems = [...efemerides].sort(ordenTimelineStats === 'desc' ? compararEfemeridesDesc : compararEfemeridesAsc);
 
-    statsTlContainer.querySelectorAll('.btn-del-efemeride-stats').forEach(btn => {
-        btn.addEventListener('click', async (ev) => {
-            ev.stopPropagation();
-            const id = ev.currentTarget.getAttribute('data-id');
-            if (await confirmarAccion("¿Eliminar este registro de acción?")) {
-                try {
-                    await deleteDoc(doc(db, 'partidos', par.id, 'efemerides', id));
-                    await recalcularResultadoPartido(par.id);
-                    mostrarNotificacion("Acción eliminada");
-                    abrirEstadisticas(par);
-                } catch(err) {
-                    console.error("Error al eliminar acción:", err);
-                    mostrarNotificacion("Error al eliminar acción", true);
+        const tlHTML = sortedEfems.map(ef => {
+             const eTipo = ef.tipo || ef.accionId;
+             const acc = configAcc.find(a => a.id === eTipo);
+             const icon = ef.icon || (acc ? acc.icon : 'fa-bolt');
+             const cl = ef.color || (acc ? acc.color : 'text-slate-500');
+             const text = ef.nombre || (acc ? acc.nombre : eTipo);
+             
+             const tInfo = extraerTiempoEfemeride(ef);
+             const minText = formatearTiempoAnotado(tInfo.min, tInfo.sec);
+             const periodoBadge = ef.periodo ? `<span class="text-[10px] font-semibold text-slate-400 ml-1.5 uppercase tracking-wider">(${ef.periodo})</span>` : '';
+             
+             let subText = ef.jugadorNombre || '';
+             if (!subText) {
+                 const jug = todosLosJugadores.find(j => j.id === ef.jugadorId);
+                 subText = jug ? jug.nombre : '';
+             }
+             
+             if (ef.jugadorEntraId || ef.jugadorEntraNombre) {
+                  const nombreEntra = ef.jugadorEntraNombre || todosLosJugadores.find(j => j.id === ef.jugadorEntraId)?.nombre || '';
+                  subText += ` <i class="fa-solid fa-arrow-right-long text-slate-400 mx-1"></i> ${nombreEntra}`;
+             }
+             
+             return `
+                 <div class="relative pl-6">
+                    <div class="absolute -left-[13px] bg-white border-2 border-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-[10px] ${cl} z-10 mt-1"><i class="fa-solid ${icon}"></i></div>
+                    <div class="bg-white border rounded-lg p-2 text-sm shadow-sm hover:shadow transition-shadow flex items-start justify-between">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <span class="font-bold text-slate-700">${minText}</span>${periodoBadge} - <span class="font-semibold ${cl}">${text}</span>
+                            ${subText ? `<div class="text-xs text-slate-500 mt-1"><i class="fa-regular fa-user mr-1"></i> ${subText}</div>` : ''}
+                            ${ef.nota ? `<div class="text-xs text-slate-400 italic mt-0.5"><i class="fa-regular fa-comment mr-1"></i> ${ef.nota}</div>` : ''}
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button class="require-editor btn-edit-efemeride-stats text-slate-400 hover:text-blue-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Editar Acción"><i class="fa-solid fa-pen text-xs"></i></button>
+                            <button class="require-editor btn-del-efemeride-stats text-slate-400 hover:text-rose-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Eliminar Acción"><i class="fa-solid fa-trash text-xs"></i></button>
+                        </div>
+                    </div>
+                 </div>
+             `;
+        }).join('');
+        
+        statsTlContainer.innerHTML = tlHTML || `<div class="text-slate-500 text-sm text-center mt-4">No hay eventos registrados</div>`;
+
+        statsTlContainer.querySelectorAll('.btn-edit-efemeride-stats').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const id = ev.currentTarget.getAttribute('data-id');
+                const efTarget = efemerides.find(e => e.id === id);
+                if (efTarget) {
+                    abrirModalAccionPartido(par, efTarget, () => abrirEstadisticas(par));
                 }
-            }
+            });
         });
-    });
+
+        statsTlContainer.querySelectorAll('.btn-del-efemeride-stats').forEach(btn => {
+            btn.addEventListener('click', async (ev) => {
+                ev.stopPropagation();
+                const id = ev.currentTarget.getAttribute('data-id');
+                if (await confirmarAccion("¿Eliminar este registro de acción?")) {
+                    try {
+                        await deleteDoc(doc(db, 'partidos', par.id, 'efemerides', id));
+                        await recalcularResultadoPartido(par.id);
+                        mostrarNotificacion("Acción eliminada");
+                        abrirEstadisticas(par);
+                    } catch(err) {
+                        console.error("Error al eliminar acción:", err);
+                        mostrarNotificacion("Error al eliminar acción", true);
+                    }
+                }
+            });
+        });
+    };
+
+    renderStatsTimeline();
+
+    const btnToggleOrden = document.getElementById('btn-toggle-orden-stats');
+    const lblOrden = document.getElementById('lbl-orden-stats');
+    const iconOrden = document.getElementById('icon-orden-stats');
+    const updateToggleUI = () => {
+        if (lblOrden) lblOrden.innerText = ordenTimelineStats === 'desc' ? "90' ➔ 1'" : "1' ➔ 90'";
+        if (iconOrden) {
+            iconOrden.className = ordenTimelineStats === 'desc' ? "fa-solid fa-arrow-down-9-1 text-blue-600" : "fa-solid fa-arrow-down-1-9 text-blue-600";
+        }
+    };
+    updateToggleUI();
+    if (btnToggleOrden) {
+        btnToggleOrden.onclick = () => {
+            ordenTimelineStats = ordenTimelineStats === 'asc' ? 'desc' : 'asc';
+            localStorage.setItem('statsTimelineOrder', ordenTimelineStats);
+            updateToggleUI();
+            renderStatsTimeline();
+        };
+    }
 
     const btnAddStats = document.getElementById('btn-add-accion-stats');
     if (btnAddStats) {
@@ -1216,6 +1248,7 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
     const containerAsistencia = document.getElementById('container-accion-asistencia');
     const selectAsistente = document.getElementById('select-accion-asistente');
     const inputMinuto = document.getElementById('input-accion-minuto');
+    const inputSegundo = document.getElementById('input-accion-segundo');
     const selectPeriodo = document.getElementById('select-accion-periodo');
     const inputNota = document.getElementById('input-accion-nota');
 
@@ -1351,16 +1384,10 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             inputJugRival.value = '';
         }
 
-        let minNum = 0;
-        if (efemeride.minuto !== undefined && efemeride.minuto !== null) {
-            minNum = efemeride.minuto;
-        } else if (efemeride.tiempoAnotado) {
-            minNum = parseInt(efemeride.tiempoAnotado.split(':')[0], 10) || 0;
-        } else if (efemeride.minutoMs) {
-            minNum = Math.floor(efemeride.minutoMs / 60000);
-        }
-        inputMinuto.value = minNum;
-        selectPeriodo.value = efemeride.periodo || (minNum > 45 ? '2ª Parte' : '1ª Parte');
+        const tInfo = extraerTiempoEfemeride(efemeride);
+        inputMinuto.value = tInfo.min;
+        if (inputSegundo) inputSegundo.value = String(tInfo.sec).padStart(2, '0');
+        selectPeriodo.value = efemeride.periodo || (tInfo.min > 45 ? '2ª Parte' : '1ª Parte');
         inputNota.value = efemeride.nota || '';
     } else {
         tituloEl.innerHTML = `<i class="fa-solid fa-bolt mr-2 text-blue-600"></i> Añadir Acción`;
@@ -1368,15 +1395,23 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
         inputJugRival.value = '';
         inputNota.value = '';
         
-        let minSugerido = 1;
+        let minSugerido = 0;
+        let secSugerido = 0;
         let perSugerido = '1ª Parte';
         if (par.cronometro) {
             if (par.cronometro.periodo) perSugerido = par.cronometro.periodo;
-            if (par.cronometro.tiempoAcumulado) {
-                minSugerido = Math.max(1, Math.floor(par.cronometro.tiempoAcumulado / 60000));
+            let msActuales = par.cronometro.tiempoAcumulado || 0;
+            if (par.cronometro.estado === 'corriendo' && par.cronometro.ultimoInicioTimer) {
+                msActuales += (Date.now() - par.cronometro.ultimoInicioTimer);
+            }
+            if (msActuales > 0) {
+                const totalSecs = Math.floor(msActuales / 1000);
+                minSugerido = Math.floor(totalSecs / 60);
+                secSugerido = totalSecs % 60;
             }
         }
         inputMinuto.value = minSugerido;
+        if (inputSegundo) inputSegundo.value = String(secSugerido).padStart(2, '0');
         selectPeriodo.value = perSugerido;
         updateFormVisibility();
     }
@@ -1389,6 +1424,15 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             selectPeriodo.value = '1ª Parte';
         }
     };
+
+    if (inputSegundo) {
+        inputSegundo.onchange = () => {
+            let val = parseInt(inputSegundo.value, 10) || 0;
+            if (val < 0) val = 0;
+            if (val > 59) val = 59;
+            inputSegundo.value = String(val).padStart(2, '0');
+        };
+    }
 
     const closeModalAccion = () => {
         modal.classList.add('hidden');
@@ -1403,7 +1447,14 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
         if (!tipoId) return alert("Selecciona un tipo de acción.");
 
         const isSust = (tipoId === 'sustitucion' || tipoId === 'sustitucion-lesion');
-        const minVal = parseInt(inputMinuto.value, 10) || 0;
+        const minVal = Math.max(0, parseInt(inputMinuto.value, 10) || 0);
+        let segVal = inputSegundo ? parseInt(inputSegundo.value, 10) || 0 : 0;
+        if (isNaN(segVal) || segVal < 0) segVal = 0;
+        if (segVal > 59) segVal = 59;
+        if (inputSegundo) inputSegundo.value = String(segVal).padStart(2, '0');
+
+        const tiempoStr = formatearTiempoAnotado(minVal, segVal);
+        const totalMs = (minVal * 60 + segVal) * 1000;
         const periodoVal = selectPeriodo.value || '1ª Parte';
         const notaVal = inputNota.value.trim();
 
@@ -1422,8 +1473,9 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             color: accDef.color || 'text-slate-500',
             periodo: periodoVal,
             minuto: minVal,
-            minutoMs: minVal * 60000,
-            tiempoAnotado: `${String(minVal).padStart(2, '0')}:00`,
+            segundo: segVal,
+            minutoMs: totalMs,
+            tiempoAnotado: tiempoStr,
             creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
             timestamp: efemeride?.timestamp || Date.now()
         };
@@ -1492,8 +1544,9 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
                         color: asisDef.color,
                         periodo: periodoVal,
                         minuto: minVal,
-                        minutoMs: minVal * 60000,
-                        tiempoAnotado: `${String(minVal).padStart(2, '0')}:00`,
+                        segundo: segVal,
+                        minutoMs: totalMs,
+                        tiempoAnotado: tiempoStr,
                         jugadorId: asisJug?.id,
                         jugadorNombre: asisJug?.nombre || '',
                         jugadorDorsal: asisJug?.dorsal || '',
