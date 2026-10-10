@@ -163,26 +163,36 @@ export function initPartidos() {
         const filasJugadoresHtml = Object.keys(statsJugadores).map(id => {
             const jug = todosLosJugadores.find(j => j.id === id);
             if (!jug) return '';
-            const st = statsJugadores[id];
-            const val = Number(st.scoreValor % 1 === 0 ? st.scoreValor : st.scoreValor.toFixed(2));
+            const st = statsJugadores[id] || {};
+            const mins = st.mins || 0;
+            const goles = st.goles || 0;
+            const asis = st.asis || 0;
+            const tPuerta = st.tPuerta || 0;
+            const tFuera = st.tFuera || 0;
+            const fRec = st.faltasRecibidas || 0;
+            const fCom = st.faltasCometidas || 0;
+            const amarillas = st.amarillas || 0;
+            const rojas = st.rojas || 0;
+            const scoreVal = st.scoreValor || 0;
+            const val = Number(scoreVal % 1 === 0 ? scoreVal : scoreVal.toFixed(2));
             const valColor = val > 0 ? '#10b981' : (val < 0 ? '#ef4444' : '#94a3b8');
             const valSign = val > 0 ? '+' : '';
             return `
                 <tr style="border-bottom: 1px solid #f1f5f9;">
                     <td style="padding: 8px 10px; font-weight: 600; color: #1e293b;">
-                        #${jug.dorsal || '-'} ${jug.nombre}
+                        #${jug.dorsal || '-'} ${jug.nombre || 'Jugador'}
                     </td>
-                    <td style="padding: 8px 6px; text-align: center; color: #475569; font-weight: 600;">${st.mins}'</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #10b981; font-weight: 700;">${st.goles}</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #f59e0b; font-weight: 700;">${st.asis}</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #0284c7; font-weight: 600;">${st.tPuerta}</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #64748b; font-weight: 600;">${st.tFuera}</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #2563eb; font-weight: 600;">${st.faltasRecibidas}</td>
-                    <td style="padding: 8px 6px; text-align: center; color: #d97706; font-weight: 600;">${st.faltasCometidas}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #475569; font-weight: 600;">${mins}'</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #10b981; font-weight: 700;">${goles}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #f59e0b; font-weight: 700;">${asis}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #0284c7; font-weight: 600;">${tPuerta}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #64748b; font-weight: 600;">${tFuera}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #2563eb; font-weight: 600;">${fRec}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #d97706; font-weight: 600;">${fCom}</td>
                     <td style="padding: 8px 6px; text-align: center;">
-                        ${st.amarillas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 2px;">${st.amarillas}A</span>` : ''}
-                        ${st.rojas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; border-radius: 3px; font-size: 10px; font-weight: bold;">${st.rojas}R</span>` : ''}
-                        ${st.amarillas === 0 && st.rojas === 0 ? '<span style="color: #cbd5e1;">-</span>' : ''}
+                        ${amarillas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 2px;">${amarillas}A</span>` : ''}
+                        ${rojas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; border-radius: 3px; font-size: 10px; font-weight: bold;">${rojas}R</span>` : ''}
+                        ${amarillas === 0 && rojas === 0 ? '<span style="color: #cbd5e1;">-</span>' : ''}
                     </td>
                     <td style="padding: 8px 8px; text-align: center; font-weight: 700; color: ${valColor};">${valSign}${val}</td>
                 </tr>
@@ -1257,7 +1267,7 @@ async function abrirEstadisticas(par) {
             }
             if (ef.jugadorEntraId) {
                 if (!statsJugadores[ef.jugadorEntraId]) {
-                    statsJugadores[ef.jugadorEntraId] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, pos: 0, neg: 0, scoreValor: 0, entrada: minParse, salida: null };
+                    statsJugadores[ef.jugadorEntraId] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: minParse, salida: null };
                 } else {
                     statsJugadores[ef.jugadorEntraId].entrada = minParse;
                     statsJugadores[ef.jugadorEntraId].salida = null;
@@ -1344,23 +1354,33 @@ async function abrirEstadisticas(par) {
     const jugListHTML = Object.keys(statsJugadores).map(id => {
         const jug = todosLosJugadores.find(j => j.id === id);
         if (!jug) return '';
-        const st = statsJugadores[id];
-        const val = Number(st.scoreValor % 1 === 0 ? st.scoreValor : st.scoreValor.toFixed(2));
+        const st = statsJugadores[id] || {};
+        const mins = st.mins || 0;
+        const goles = st.goles || 0;
+        const asis = st.asis || 0;
+        const tPuerta = st.tPuerta || 0;
+        const tFuera = st.tFuera || 0;
+        const fRec = st.faltasRecibidas || 0;
+        const fCom = st.faltasCometidas || 0;
+        const amarillas = st.amarillas || 0;
+        const rojas = st.rojas || 0;
+        const scoreVal = st.scoreValor || 0;
+        const val = Number(scoreVal % 1 === 0 ? scoreVal : scoreVal.toFixed(2));
         let pColor = val > 0 ? 'text-emerald-500 font-bold' : (val < 0 ? 'text-red-500 font-bold' : 'text-slate-400');
         return `
             <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0 md:table-row">
-                <td class="px-3 py-2 font-medium">#${jug.dorsal || '-'} ${jug.nombre}</td>
-                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.mins}'</td>
-                <td class="px-2 py-2 text-center text-emerald-600 font-bold">${st.goles}</td>
-                <td class="px-2 py-2 text-center text-amber-600 font-bold">${st.asis}</td>
-                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.tPuerta}</td>
-                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.tFuera}</td>
-                <td class="px-2 py-2 text-center text-blue-600 font-bold">${st.faltasRecibidas}</td>
-                <td class="px-2 py-2 text-center text-amber-700 font-bold">${st.faltasCometidas}</td>
+                <td class="px-3 py-2 font-medium">#${jug.dorsal || '-'} ${jug.nombre || 'Jugador'}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${mins}'</td>
+                <td class="px-2 py-2 text-center text-emerald-600 font-bold">${goles}</td>
+                <td class="px-2 py-2 text-center text-amber-600 font-bold">${asis}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${tPuerta}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${tFuera}</td>
+                <td class="px-2 py-2 text-center text-blue-600 font-bold">${fRec}</td>
+                <td class="px-2 py-2 text-center text-amber-700 font-bold">${fCom}</td>
                 <td class="px-2 py-2 text-center font-bold">
-                    ${st.amarillas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] mr-1">${st.amarillas}A</span>` : ''}
-                    ${st.rojas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[10px]">${st.rojas}R</span>` : ''}
-                    ${st.amarillas === 0 && st.rojas === 0 ? '<span class="text-slate-300">-</span>' : ''}
+                    ${amarillas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] mr-1">${amarillas}A</span>` : ''}
+                    ${rojas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[10px]">${rojas}R</span>` : ''}
+                    ${amarillas === 0 && rojas === 0 ? '<span class="text-slate-300">-</span>' : ''}
                 </td>
                 <td class="px-2 py-2 text-center font-bold ${pColor}" title="Valoración: ${val}">${val > 0 ? '+'+val : val}</td>
             </tr>
