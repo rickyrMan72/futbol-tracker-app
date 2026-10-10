@@ -1,8 +1,8 @@
-import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
+import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc, query, where, auth, getDoc } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
-import { DEFAULT_ACCIONES } from './mod-directo.js';
+import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL } from './mod-directo.js';
 import { getGlobalAcciones } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
@@ -232,15 +232,37 @@ export function initPartidos() {
         try { 
             const editId = document.getElementById('form-partido').dataset.editId;
             if (editId) {
-                const existingPartido = todosLosPartidos.find(p => p.id === editId);
+                const existingPartido = todosLosPartidos.find(p => p.id === editId) || {};
+                const oldTitulares = existingPartido.titulares || [];
+                const oldEnCampo = existingPartido.enCampo || oldTitulares;
+                
+                // Jugadores que se acaban de marcar como titulares
+                const addedTitulares = titulares.filter(id => !oldTitulares.includes(id));
+                // Jugadores que se han desmarcado de titulares
+                const removedTitulares = oldTitulares.filter(id => !titulares.includes(id));
+                
+                let updatedEnCampo = [...oldEnCampo];
+                // Añadir los nuevos titulares al campo (si no estaban ya)
+                addedTitulares.forEach(id => {
+                    if (!updatedEnCampo.includes(id)) {
+                        updatedEnCampo.push(id);
+                    }
+                });
+                // Quitar a los que se han desmarcado como titulares
+                updatedEnCampo = updatedEnCampo.filter(id => !removedTitulares.includes(id));
+                // Asegurar que solo sigan en el campo los que están convocados
+                updatedEnCampo = updatedEnCampo.filter(id => convocados.includes(id));
+                
                 const hasStarted = existingPartido && existingPartido.cronometro && 
                                    (existingPartido.cronometro.tiempoAcumulado > 0 || existingPartido.cronometro.estado !== 'pausado');
-                
-                if (!hasStarted) {
-                    data.enCampo = titulares;
+                if (!hasStarted || updatedEnCampo.length === 0) {
+                    updatedEnCampo = [...titulares];
                 }
+
+                data.enCampo = updatedEnCampo;
+
                 await updateDoc(doc(db, 'partidos', editId), data);
-                mostrarNotificacion("Partido actualizado"); 
+                mostrarNotificacion("Partido y alineación actualizados"); 
             } else {
                 // Initialize match state
                 data.enCampo = titulares;
@@ -339,38 +361,44 @@ function bindPartidoEvents(el, par, isFinalizadoMatch) {
 
     el.querySelector('.btn-edit-par')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        document.getElementById('input-partido-rival').value = par.rival;
-        document.getElementById('input-partido-local').checked = par.esLocal !== false;
-        document.getElementById('input-partido-escudo-rival').value = par.escudoRival || '';
-        document.getElementById('input-partido-fecha').value = par.fecha;
-        document.getElementById('input-partido-hora').value = par.hora;
-        document.getElementById('input-partido-lugar').value = par.lugar || '';
-        document.getElementById('input-partido-comentarios').value = par.comentarios || '';
-        
-        const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === equipoIdActivo);
-        jugadoresEquipo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
-
-        document.getElementById('partido-jugadores-list').innerHTML = jugadoresEquipo.map(jug => {
-            const esConv = (par.convocados || []).includes(jug.id);
-            const esTit = (par.titulares || []).includes(jug.id);
-            
-            return `
-                <label class="flex justify-between items-center text-sm p-2 hover:bg-slate-100 rounded cursor-pointer border-b border-slate-100 border-opacity-50">
-                    <span class="truncate pr-2">#${jug.dorsal} ${jug.nombre}</span>
-                    <div class="flex gap-4 min-w-max">
-                        <input type="checkbox" value="${jug.id}" class="chk-convocado w-5 h-5 rounded border-slate-300 text-amber-500 focus:ring-amber-500" ${esConv ? 'checked' : ''}>
-                        <input type="checkbox" value="${jug.id}" class="chk-titular w-5 h-5 rounded border-slate-300 text-red-500 focus:ring-red-500" ${esTit ? 'checked' : ''} ${!esConv ? 'disabled' : ''}>
-                    </div>
-                </label>
-            `;
-        }).join('');
-        
-        añadirEventosCheckboxes();
-
-        document.getElementById('form-partido').dataset.editId = par.id;
-        document.querySelector('#modal-partido h3').innerText = "Editar Partido";
-        document.getElementById('modal-partido').classList.remove('hidden');
+        abrirEdicionPartido(par);
     });
+}
+
+export function abrirEdicionPartido(par) {
+    if (!par) return;
+    document.getElementById('input-partido-rival').value = par.rival || '';
+    document.getElementById('input-partido-local').checked = par.esLocal !== false;
+    document.getElementById('input-partido-escudo-rival').value = par.escudoRival || '';
+    document.getElementById('input-partido-fecha').value = par.fecha || '';
+    document.getElementById('input-partido-hora').value = par.hora || '';
+    document.getElementById('input-partido-lugar').value = par.lugar || '';
+    document.getElementById('input-partido-comentarios').value = par.comentarios || '';
+    
+    const eqId = par.equipoId || equipoIdActivo;
+    const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === eqId);
+    jugadoresEquipo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+
+    document.getElementById('partido-jugadores-list').innerHTML = jugadoresEquipo.map(jug => {
+        const esConv = (par.convocados || []).includes(jug.id);
+        const esTit = (par.titulares || []).includes(jug.id);
+        
+        return `
+            <label class="flex justify-between items-center text-sm p-2 hover:bg-slate-100 rounded cursor-pointer border-b border-slate-100 border-opacity-50">
+                <span class="truncate pr-2">#${jug.dorsal} ${jug.nombre}</span>
+                <div class="flex gap-4 min-w-max">
+                    <input type="checkbox" value="${jug.id}" class="chk-convocado w-5 h-5 rounded border-slate-300 text-amber-500 focus:ring-amber-500" ${esConv ? 'checked' : ''}>
+                    <input type="checkbox" value="${jug.id}" class="chk-titular w-5 h-5 rounded border-slate-300 text-red-500 focus:ring-red-500" ${esTit ? 'checked' : ''} ${!esConv ? 'disabled' : ''}>
+                </div>
+            </label>
+        `;
+    }).join('');
+    
+    añadirEventosCheckboxes();
+
+    document.getElementById('form-partido').dataset.editId = par.id;
+    document.querySelector('#modal-partido h3').innerText = "Editar Partido / Convocatoria";
+    document.getElementById('modal-partido').classList.remove('hidden');
 }
 
 function dibujarPartidos() {
@@ -980,15 +1008,59 @@ async function abrirEstadisticas(par) {
          return `
              <div class="relative pl-6">
                 <div class="absolute -left-[13px] bg-white border-2 border-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-[10px] ${cl} z-10 mt-1"><i class="fa-solid ${icon}"></i></div>
-                <div class="bg-white border rounded-lg p-2 text-sm shadow-sm hover:shadow transition-shadow">
-                    <span class="font-bold text-slate-700">${minText}</span> - <span class="font-semibold ${cl}">${text}</span>
-                    ${subText ? `<div class="text-xs text-slate-500 mt-1"><i class="fa-regular fa-user mr-1"></i> ${subText}</div>` : ''}
+                <div class="bg-white border rounded-lg p-2 text-sm shadow-sm hover:shadow transition-shadow flex items-start justify-between">
+                    <div class="flex-1 min-w-0 pr-2">
+                        <span class="font-bold text-slate-700">${minText}</span> - <span class="font-semibold ${cl}">${text}</span>
+                        ${subText ? `<div class="text-xs text-slate-500 mt-1"><i class="fa-regular fa-user mr-1"></i> ${subText}</div>` : ''}
+                        ${ef.nota ? `<div class="text-xs text-slate-400 italic mt-0.5"><i class="fa-regular fa-comment mr-1"></i> ${ef.nota}</div>` : ''}
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button class="require-editor btn-edit-efemeride-stats text-slate-400 hover:text-blue-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Editar Acción"><i class="fa-solid fa-pen text-xs"></i></button>
+                        <button class="require-editor btn-del-efemeride-stats text-slate-400 hover:text-rose-600 p-1.5 rounded hover:bg-slate-100 transition-colors" data-id="${ef.id}" title="Eliminar Acción"><i class="fa-solid fa-trash text-xs"></i></button>
+                    </div>
                 </div>
              </div>
          `;
     }).reverse().join('');
     
-    document.getElementById('stats-timeline-container').innerHTML = tlHTML || `<div class="text-slate-500 text-sm text-center mt-4">No hay eventos registrados</div>`;
+    const statsTlContainer = document.getElementById('stats-timeline-container');
+    statsTlContainer.innerHTML = tlHTML || `<div class="text-slate-500 text-sm text-center mt-4">No hay eventos registrados</div>`;
+
+    statsTlContainer.querySelectorAll('.btn-edit-efemeride-stats').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const id = ev.currentTarget.getAttribute('data-id');
+            const efTarget = efemerides.find(e => e.id === id);
+            if (efTarget) {
+                abrirModalAccionPartido(par, efTarget, () => abrirEstadisticas(par));
+            }
+        });
+    });
+
+    statsTlContainer.querySelectorAll('.btn-del-efemeride-stats').forEach(btn => {
+        btn.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            const id = ev.currentTarget.getAttribute('data-id');
+            if (await confirmarAccion("¿Eliminar este registro de acción?")) {
+                try {
+                    await deleteDoc(doc(db, 'partidos', par.id, 'efemerides', id));
+                    await recalcularResultadoPartido(par.id);
+                    mostrarNotificacion("Acción eliminada");
+                    abrirEstadisticas(par);
+                } catch(err) {
+                    console.error("Error al eliminar acción:", err);
+                    mostrarNotificacion("Error al eliminar acción", true);
+                }
+            }
+        });
+    });
+
+    const btnAddStats = document.getElementById('btn-add-accion-stats');
+    if (btnAddStats) {
+        btnAddStats.onclick = () => {
+            abrirModalAccionPartido(par, null, () => abrirEstadisticas(par));
+        };
+    }
     
     // Generate share text
     let stText = `📊 ESTADÍSTICAS DEL PARTIDO\n`;
@@ -1090,6 +1162,364 @@ async function abrirEstadisticas(par) {
         wrapper.classList.add('hidden');
         if (temporalWrapper) temporalWrapper.classList.add('hidden');
     }
+}
+
+export async function recalcularResultadoPartido(partidoId) {
+    try {
+        const snap = await getDocs(collection(db, 'partidos', partidoId, 'efemerides'));
+        let golesMios = 0;
+        let golesRival = 0;
+        snap.forEach(d => {
+            const data = d.data();
+            const tipo = data.tipo || data.accionId;
+            if (tipo && typeof tipo === 'string' && tipo.startsWith('gol-')) {
+                if (tipo === 'gol-rival') {
+                    golesRival++;
+                } else {
+                    golesMios++;
+                }
+            }
+        });
+
+        const parEnMemoria = todosLosPartidos.find(p => p.id === partidoId);
+        let esLocal = true;
+        if (parEnMemoria) {
+            esLocal = parEnMemoria.esLocal !== false;
+        } else {
+            const pDoc = await getDoc(doc(db, 'partidos', partidoId));
+            if (pDoc.exists()) esLocal = pDoc.data().esLocal !== false;
+        }
+
+        const resultadoStr = esLocal ? `${golesMios} - ${golesRival}` : `${golesRival} - ${golesMios}`;
+        await updateDoc(doc(db, 'partidos', partidoId), { resultado: resultadoStr });
+        if (parEnMemoria) parEnMemoria.resultado = resultadoStr;
+    } catch(err) {
+        console.error("Error al recalcular resultado:", err);
+    }
+}
+
+export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
+    const modal = document.getElementById('modal-accion-partido');
+    if (!modal || !par) return;
+
+    const tituloEl = document.getElementById('titulo-modal-accion-partido');
+    const btnEquipoMio = document.getElementById('btn-accion-equipo-mio');
+    const btnEquipoRival = document.getElementById('btn-accion-equipo-rival');
+    const selectTipo = document.getElementById('select-accion-tipo');
+    const containerJugPrincipal = document.getElementById('container-accion-jugador-principal');
+    const selectJugador = document.getElementById('select-accion-jugador');
+    const containerJugRival = document.getElementById('container-accion-jugador-rival');
+    const inputJugRival = document.getElementById('input-accion-jugador-rival');
+    const containerSustitucion = document.getElementById('container-accion-sustitucion');
+    const selectJugSale = document.getElementById('select-accion-jugador-sale');
+    const selectJugEntra = document.getElementById('select-accion-jugador-entra');
+    const containerAsistencia = document.getElementById('container-accion-asistencia');
+    const selectAsistente = document.getElementById('select-accion-asistente');
+    const inputMinuto = document.getElementById('input-accion-minuto');
+    const selectPeriodo = document.getElementById('select-accion-periodo');
+    const inputNota = document.getElementById('input-accion-nota');
+
+    const configAcc = par.configAcciones || DEFAULT_ACCIONES;
+    const configRival = par.configAccionesRival || DEFAULT_ACCIONES_RIVAL;
+
+    const eqId = par.equipoId || equipoIdActivo;
+    const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === eqId);
+    jugadoresEquipo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+    const convocados = par.convocados || [];
+
+    const populateJugadoresSelect = (selectEl, defaultId = '', includeEmpty = false, emptyText = '-- Seleccionar jugador --') => {
+        let opts = includeEmpty ? `<option value="">${emptyText}</option>` : '';
+        jugadoresEquipo.forEach(j => {
+            const esConv = convocados.includes(j.id);
+            const tag = esConv ? ' (Convocado)' : '';
+            opts += `<option value="${j.id}" ${j.id === defaultId ? 'selected' : ''}>#${j.dorsal || '?'} ${j.nombre}${tag}</option>`;
+        });
+        selectEl.innerHTML = opts;
+    };
+
+    let ambitoEquipo = 'mio';
+
+    if (efemeride) {
+        const eTipo = efemeride.tipo || efemeride.accionId || '';
+        if (eTipo.includes('rival') || (!efemeride.jugadorId && !efemeride.jugadorNombre)) {
+            ambitoEquipo = 'rival';
+        } else {
+            ambitoEquipo = 'mio';
+        }
+    }
+
+    const updateAccionesSelect = () => {
+        if (ambitoEquipo === 'mio') {
+            btnEquipoMio.className = "py-2 text-xs font-bold rounded-md transition-all bg-white text-slate-800 shadow-sm border border-slate-200";
+            btnEquipoRival.className = "py-2 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800";
+            containerJugPrincipal.classList.remove('hidden');
+            containerJugRival.classList.add('hidden');
+
+            selectTipo.innerHTML = configAcc.filter(a => a.isActive !== false).map(a => `
+                <option value="${a.id}">${a.nombre}</option>
+            `).join('');
+        } else {
+            btnEquipoRival.className = "py-2 text-xs font-bold rounded-md transition-all bg-white text-rose-700 shadow-sm border border-slate-200";
+            btnEquipoMio.className = "py-2 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800";
+            containerJugPrincipal.classList.add('hidden');
+            containerJugRival.classList.remove('hidden');
+
+            const rivalIds = configRival.map(r => r.id);
+            let combinedRival = [...configRival];
+            [
+                { id: 'gol-rival', nombre: 'Gol Rival' },
+                { id: 'tiro-rival', nombre: 'Tiro Rival' },
+                { id: 'falta-rival', nombre: 'Falta Rival' },
+                { id: 'amarilla-rival', nombre: 'Tarjeta Amarilla Rival' },
+                { id: 'roja-rival', nombre: 'Tarjeta Roja Rival' }
+            ].forEach(defR => {
+                if (!rivalIds.includes(defR.id)) combinedRival.push(defR);
+            });
+
+            selectTipo.innerHTML = combinedRival.map(a => `
+                <option value="${a.id}">${a.nombre}</option>
+            `).join('');
+        }
+        updateFormVisibility();
+    };
+
+    const updateFormVisibility = () => {
+        const t = selectTipo.value;
+        const isSust = (t === 'sustitucion' || t === 'sustitucion-lesion');
+        const isGolMio = ambitoEquipo === 'mio' && typeof t === 'string' && t.startsWith('gol-') && t !== 'gol-rival';
+
+        if (ambitoEquipo === 'mio') {
+            if (isSust) {
+                containerSustitucion.classList.remove('hidden');
+                containerJugPrincipal.classList.add('hidden');
+            } else {
+                containerSustitucion.classList.add('hidden');
+                containerJugPrincipal.classList.remove('hidden');
+            }
+
+            if (isGolMio) {
+                containerAsistencia.classList.remove('hidden');
+            } else {
+                containerAsistencia.classList.add('hidden');
+            }
+        } else {
+            containerSustitucion.classList.add('hidden');
+            containerAsistencia.classList.add('hidden');
+        }
+    };
+
+    btnEquipoMio.onclick = () => {
+        ambitoEquipo = 'mio';
+        updateAccionesSelect();
+    };
+    btnEquipoRival.onclick = () => {
+        ambitoEquipo = 'rival';
+        updateAccionesSelect();
+    };
+    selectTipo.onchange = updateFormVisibility;
+
+    populateJugadoresSelect(selectJugador, efemeride?.jugadorId || '');
+    populateJugadoresSelect(selectJugSale, efemeride?.jugadorId || '', true, '-- Jugador que sale --');
+    populateJugadoresSelect(selectJugEntra, efemeride?.jugadorEntraId || '', true, '-- Jugador que entra --');
+    populateJugadoresSelect(selectAsistente, efemeride?.asistenteId || '', true, '-- Sin asistencia / Jugada individual --');
+
+    updateAccionesSelect();
+
+    if (efemeride) {
+        tituloEl.innerHTML = `<i class="fa-solid fa-pen-to-square mr-2 text-blue-600"></i> Editar Acción`;
+        modal.dataset.editId = efemeride.id;
+        
+        const eTipo = efemeride.tipo || efemeride.accionId;
+        if (eTipo) {
+            selectTipo.value = eTipo;
+        }
+        updateFormVisibility();
+
+        if (efemeride.jugadorId) {
+            selectJugador.value = efemeride.jugadorId;
+            selectJugSale.value = efemeride.jugadorId;
+        }
+        if (efemeride.jugadorEntraId) {
+            selectJugEntra.value = efemeride.jugadorEntraId;
+        }
+        if (efemeride.asistenteId) {
+            selectAsistente.value = efemeride.asistenteId;
+        }
+        if (efemeride.jugadorRival || efemeride.jugadorNombre) {
+            inputJugRival.value = efemeride.jugadorRival || (ambitoEquipo === 'rival' ? efemeride.jugadorNombre : '');
+        } else {
+            inputJugRival.value = '';
+        }
+
+        let minNum = 0;
+        if (efemeride.minuto !== undefined && efemeride.minuto !== null) {
+            minNum = efemeride.minuto;
+        } else if (efemeride.tiempoAnotado) {
+            minNum = parseInt(efemeride.tiempoAnotado.split(':')[0], 10) || 0;
+        } else if (efemeride.minutoMs) {
+            minNum = Math.floor(efemeride.minutoMs / 60000);
+        }
+        inputMinuto.value = minNum;
+        selectPeriodo.value = efemeride.periodo || (minNum > 45 ? '2ª Parte' : '1ª Parte');
+        inputNota.value = efemeride.nota || '';
+    } else {
+        tituloEl.innerHTML = `<i class="fa-solid fa-bolt mr-2 text-blue-600"></i> Añadir Acción`;
+        delete modal.dataset.editId;
+        inputJugRival.value = '';
+        inputNota.value = '';
+        
+        let minSugerido = 1;
+        let perSugerido = '1ª Parte';
+        if (par.cronometro) {
+            if (par.cronometro.periodo) perSugerido = par.cronometro.periodo;
+            if (par.cronometro.tiempoAcumulado) {
+                minSugerido = Math.max(1, Math.floor(par.cronometro.tiempoAcumulado / 60000));
+            }
+        }
+        inputMinuto.value = minSugerido;
+        selectPeriodo.value = perSugerido;
+        updateFormVisibility();
+    }
+
+    inputMinuto.oninput = () => {
+        const val = parseInt(inputMinuto.value, 10);
+        if (val > 45 && selectPeriodo.value === '1ª Parte') {
+            selectPeriodo.value = '2ª Parte';
+        } else if (val <= 45 && selectPeriodo.value === '2ª Parte' && !efemeride) {
+            selectPeriodo.value = '1ª Parte';
+        }
+    };
+
+    const closeModalAccion = () => {
+        modal.classList.add('hidden');
+        delete modal.dataset.editId;
+    };
+
+    document.getElementById('btn-close-modal-accion-partido').onclick = closeModalAccion;
+    document.getElementById('btn-cancel-modal-accion-partido').onclick = closeModalAccion;
+
+    document.getElementById('btn-save-modal-accion-partido').onclick = async () => {
+        const tipoId = selectTipo.value;
+        if (!tipoId) return alert("Selecciona un tipo de acción.");
+
+        const isSust = (tipoId === 'sustitucion' || tipoId === 'sustitucion-lesion');
+        const minVal = parseInt(inputMinuto.value, 10) || 0;
+        const periodoVal = selectPeriodo.value || '1ª Parte';
+        const notaVal = inputNota.value.trim();
+
+        const allAccs = [...configAcc, ...configRival, ...DEFAULT_ACCIONES, ...DEFAULT_ACCIONES_RIVAL];
+        const accDef = allAccs.find(a => a.id === tipoId) || {
+            id: tipoId,
+            nombre: tipoId,
+            icon: tipoId.includes('gol') ? 'fa-futbol' : (tipoId.includes('tarjeta') || tipoId.includes('amarilla') || tipoId.includes('roja') ? 'fa-square' : 'fa-bolt'),
+            color: tipoId.includes('gol') ? 'text-emerald-500' : (tipoId.includes('roja') ? 'text-red-500' : (tipoId.includes('amarilla') ? 'text-amber-500' : 'text-slate-500'))
+        };
+
+        const eData = {
+            tipo: tipoId,
+            nombre: accDef.nombre,
+            icon: accDef.icon || 'fa-bolt',
+            color: accDef.color || 'text-slate-500',
+            periodo: periodoVal,
+            minuto: minVal,
+            minutoMs: minVal * 60000,
+            tiempoAnotado: `${String(minVal).padStart(2, '0')}:00`,
+            creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+            timestamp: efemeride?.timestamp || Date.now()
+        };
+
+        if (notaVal) eData.nota = notaVal;
+
+        if (ambitoEquipo === 'mio') {
+            if (isSust) {
+                const jSaleId = selectJugSale.value;
+                const jEntraId = selectJugEntra.value;
+                if (!jSaleId || !jEntraId) return alert("Selecciona el jugador que sale y el jugador que entra.");
+                if (jSaleId === jEntraId) return alert("El jugador que sale no puede ser el mismo que entra.");
+
+                const jSale = todosLosJugadores.find(j => j.id === jSaleId);
+                const jEntra = todosLosJugadores.find(j => j.id === jEntraId);
+
+                eData.jugadorId = jSaleId;
+                eData.jugadorNombre = jSale?.nombre || '';
+                eData.jugadorDorsal = jSale?.dorsal || '';
+                eData.jugadorEntraId = jEntraId;
+                eData.jugadorEntraNombre = jEntra?.nombre || '';
+                eData.jugadorEntraDorsal = jEntra?.dorsal || '';
+            } else {
+                const jId = selectJugador.value;
+                if (!jId) return alert("Selecciona un jugador.");
+                const jInfo = todosLosJugadores.find(j => j.id === jId);
+                eData.jugadorId = jId;
+                eData.jugadorNombre = jInfo?.nombre || '';
+                eData.jugadorDorsal = jInfo?.dorsal || '';
+
+                if (accDef.isPositive !== undefined) eData.isPositive = accDef.isPositive;
+                if (accDef.score !== undefined) eData.score = accDef.score;
+
+                const asisId = selectAsistente.value;
+                if (asisId && typeof tipoId === 'string' && tipoId.startsWith('gol-')) {
+                    const asisJug = todosLosJugadores.find(j => j.id === asisId);
+                    eData.asistenteId = asisId;
+                    eData.asistenteNombre = asisJug?.nombre || '';
+                }
+            }
+        } else {
+            const nomRivalJug = inputJugRival.value.trim();
+            if (nomRivalJug) {
+                eData.jugadorNombre = nomRivalJug;
+                eData.jugadorRival = nomRivalJug;
+            } else {
+                eData.jugadorNombre = 'Rival';
+            }
+        }
+
+        try {
+            const editId = modal.dataset.editId;
+            if (editId) {
+                await updateDoc(doc(db, 'partidos', par.id, 'efemerides', editId), eData);
+                mostrarNotificacion("Acción actualizada");
+            } else {
+                await addDoc(collection(db, 'partidos', par.id, 'efemerides'), eData);
+                
+                if (eData.asistenteId && typeof tipoId === 'string' && tipoId.startsWith('gol-')) {
+                    const asisJug = todosLosJugadores.find(j => j.id === eData.asistenteId);
+                    const asisDef = allAccs.find(a => a.id === 'asistencia') || { nombre: 'Asistencia', icon: 'fa-handshake', color: 'text-blue-500', isPositive: true, score: 2 };
+                    await addDoc(collection(db, 'partidos', par.id, 'efemerides'), {
+                        tipo: 'asistencia',
+                        nombre: asisDef.nombre,
+                        icon: asisDef.icon,
+                        color: asisDef.color,
+                        periodo: periodoVal,
+                        minuto: minVal,
+                        minutoMs: minVal * 60000,
+                        tiempoAnotado: `${String(minVal).padStart(2, '0')}:00`,
+                        jugadorId: asisJug?.id,
+                        jugadorNombre: asisJug?.nombre || '',
+                        jugadorDorsal: asisJug?.dorsal || '',
+                        timestamp: Date.now() + 10,
+                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+                        nota: `Para el gol de ${eData.jugadorNombre}`
+                    });
+                }
+
+                mostrarNotificacion("Acción añadida");
+            }
+
+            await recalcularResultadoPartido(par.id);
+
+            closeModalAccion();
+
+            if (typeof onSaved === 'function') {
+                onSaved();
+            }
+        } catch(err) {
+            console.error("Error al guardar acción:", err);
+            mostrarNotificacion("Error al guardar acción", true);
+        }
+    };
+
+    modal.classList.remove('hidden');
 }
 
 async function actualizarDashboardUltimoPartido(partidos, ahora) {

@@ -196,6 +196,7 @@
                     <button id="btn-back-partidos" class="text-slate-500 hover:text-slate-800 transition-colors"><i class="fa-solid fa-arrow-left mr-2"></i> Volver</button>
                     <h3 id="directo-titulo-partido" class="font-bold text-base sm:text-lg text-slate-800 truncate px-2">Cargando...</h3>
                     <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                        <button id="btn-edit-partido-directo" class="require-editor text-slate-500 hover:text-slate-800 transition-colors px-1" title="Editar Convocatoria / Titulares"><i class="fa-solid fa-pen text-lg"></i></button>
                         <button id="btn-config-acciones" class="require-editor text-slate-500 hover:text-slate-800 transition-colors px-1" title="Configurar Acciones"><i class="fa-solid fa-gear text-lg"></i></button>
                     </div>
                 </div>
@@ -229,7 +230,10 @@
                     <div class="w-1/2 flex flex-col bg-white rounded-xl border shadow-sm overflow-hidden min-h-[200px]">
                         <div class="bg-emerald-50 border-b border-emerald-100 px-2 sm:px-4 py-2 font-bold text-emerald-800 flex justify-between items-center shrink-0 text-sm">
                             <span class="truncate"><i class="fa-solid fa-users mr-1"></i> <span class="hidden sm:inline">En el Campo</span></span>
-                            <span id="directo-count-campo" class="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs shrink-0">0</span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span id="directo-count-campo" class="bg-emerald-200 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-bold">0</span>
+                                <button id="btn-quick-edit-campo" class="require-editor text-emerald-700 hover:text-emerald-900 text-xs px-1 transition-colors" title="Editar convocatoria y titulares"><i class="fa-solid fa-pen"></i></button>
+                            </div>
                         </div>
                         <div id="directo-jugadores-list" class="flex-1 overflow-y-auto p-1.5 sm:p-2 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 sm:gap-2 content-start">
                             <!-- Los jugadores que están en el campo aparecen aquí -->
@@ -256,7 +260,10 @@
                 <!-- BOTTOM: Línea de tiempo / Efemérides -->
                 <div id="directo-timeline-container" class="bg-white/90 backdrop-blur border-t border-x rounded-t-xl shadow-[0_-4px_15px_-5px_rgba(0,0,0,0.1)] flex flex-col shrink-0 h-10 sm:h-12 relative z-10 transition-all group hover:h-48 sm:hover:h-64 overflow-hidden">
                     <div class="bg-slate-50 border-b border-slate-200 px-4 h-10 sm:h-12 font-bold text-slate-500 shrink-0 text-xs flex justify-between items-center rounded-t-xl group-hover:bg-slate-100 transition-colors">
-                        <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
+                        <div class="flex items-center gap-2">
+                            <span class="flex items-center"><i class="fa-solid fa-list-ul mr-2 text-slate-400"></i> Registro de partido <span class="ml-2 text-[10px] font-normal text-slate-400 opacity-0 md:opacity-100">(Pasa el ratón para expandir)</span></span>
+                            <button id="btn-add-accion-directo" class="require-editor text-[11px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded-md font-semibold transition-colors flex items-center gap-1 shadow-xs" title="Añadir acción manual"><i class="fa-solid fa-plus text-[10px]"></i> Añadir Acción</button>
+                        </div>
                         <div class="flex items-center gap-3">
                             <i class="fa-solid fa-chevron-up text-slate-300 md:hidden"></i>
                             <button id="btn-timeline-expand" class="text-slate-400 hover:text-slate-600 transition-colors text-sm" title="Pantalla completa"><i class="fa-solid fa-expand"></i></button>
@@ -749,7 +756,10 @@
                 </div>
                 
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col h-full break-inside-avoid" id="stats-timeline-panel">
-                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2">Timeline del Partido</h4>
+                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                        <h4 class="font-bold text-slate-700">Timeline del Partido</h4>
+                        <button id="btn-add-accion-stats" class="require-editor px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"><i class="fa-solid fa-plus"></i> Añadir Acción</button>
+                    </div>
                     <div class="overflow-y-auto max-h-[400px] flex-1 pr-2 pl-4 py-2" id="stats-timeline-scroll">
                         <div class="relative space-y-4 border-l-2 border-slate-200 py-2" id="stats-timeline-container">
                         </div>
@@ -760,6 +770,115 @@
                 <button id="btn-export-pdf" class="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir PDF</button>
                 <button id="btn-share-modal-estadisticas" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-medium shadow-sm transition-colors"><i class="fa-solid fa-share-nodes mr-2"></i> Compartir Texto</button>
                 <button id="btn-done-modal-estadisticas" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors">Volver</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL AÑADIR / EDITAR ACCIÓN DE PARTIDO -->
+    <div id="modal-accion-partido" class="fixed inset-0 bg-slate-900 bg-opacity-60 z-[70] hidden flex items-center justify-center p-4 fade-in">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="font-bold text-lg text-slate-800" id="titulo-modal-accion-partido">
+                    <i class="fa-solid fa-bolt mr-2 text-blue-600"></i> Registrar Acción
+                </h3>
+                <button id="btn-close-modal-accion-partido" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                <!-- Ámbito: Mi Equipo vs Rival -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Equipo</label>
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-lg">
+                        <button type="button" id="btn-accion-equipo-mio" class="py-2 text-xs font-bold rounded-md transition-all bg-white text-slate-800 shadow-sm">
+                            <i class="fa-solid fa-shield-halved mr-1 text-emerald-600"></i> Mi Equipo
+                        </button>
+                        <button type="button" id="btn-accion-equipo-rival" class="py-2 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">
+                            <i class="fa-solid fa-shield mr-1 text-rose-500"></i> Rival
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tipo de Acción -->
+                <div>
+                    <label for="select-accion-tipo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Tipo de Acción</label>
+                    <select id="select-accion-tipo" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <!-- Generado dinámicamente -->
+                    </select>
+                </div>
+
+                <!-- Jugador Principal (Mi Equipo) -->
+                <div id="container-accion-jugador-principal">
+                    <label for="select-accion-jugador" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Jugador</label>
+                    <select id="select-accion-jugador" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <!-- Generado dinámicamente -->
+                    </select>
+                </div>
+
+                <!-- Jugador Rival (Nombre / Dorsal opcional) -->
+                <div id="container-accion-jugador-rival" class="hidden">
+                    <label for="input-accion-jugador-rival" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Jugador Rival (Opcional)</label>
+                    <input type="text" id="input-accion-jugador-rival" placeholder="Ej. #9 Delantero o nombre" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+
+                <!-- Campos específicos para Sustitución -->
+                <div id="container-accion-sustitucion" class="hidden space-y-3 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    <div>
+                        <label for="select-accion-jugador-sale" class="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-arrow-right-from-bracket text-red-500 mr-1"></i> Jugador que sale
+                        </label>
+                        <select id="select-accion-jugador-sale" class="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white">
+                        </select>
+                    </div>
+                    <div>
+                        <label for="select-accion-jugador-entra" class="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-arrow-right-to-bracket text-emerald-500 mr-1"></i> Jugador que entra
+                        </label>
+                        <select id="select-accion-jugador-entra" class="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white">
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Asistencia Opcional (para Goles) -->
+                <div id="container-accion-asistencia" class="hidden">
+                    <label for="select-accion-asistente" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                        <i class="fa-solid fa-handshake mr-1 text-amber-500"></i> Asistente (Opcional)
+                    </label>
+                    <select id="select-accion-asistente" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">-- Sin Asistencia / Jugada Individual --</option>
+                    </select>
+                </div>
+
+                <!-- Tiempo: Minuto y Periodo -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="input-accion-minuto" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Minuto de Juego</label>
+                        <div class="relative">
+                            <input type="number" id="input-accion-minuto" min="0" max="130" value="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold">
+                            <span class="absolute right-3 top-2 text-slate-400 text-sm font-bold">'</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="select-accion-periodo" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Periodo</label>
+                        <select id="select-accion-periodo" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="1ª Parte">1ª Parte</option>
+                            <option value="2ª Parte">2ª Parte</option>
+                            <option value="Prórroga 1">Prórroga 1</option>
+                            <option value="Prórroga 2">Prórroga 2</option>
+                            <option value="Penaltis">Penaltis</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Detalle / Nota Opcional -->
+                <div>
+                    <label for="input-accion-nota" class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nota / Observación (Opcional)</label>
+                    <input type="text" id="input-accion-nota" placeholder="Ej. De penalti, tiro lejano, contraataque..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 flex justify-end space-x-3 bg-slate-50">
+                <button type="button" id="btn-cancel-modal-accion-partido" class="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium text-sm transition-colors">Cancelar</button>
+                <button type="button" id="btn-save-modal-accion-partido" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm transition-colors shadow-sm">Guardar Acción</button>
             </div>
         </div>
     </div>

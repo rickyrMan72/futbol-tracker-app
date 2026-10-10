@@ -3,7 +3,7 @@ import { mostrarNotificacion, confirmarAccion } from './ui.js';
 import { todosLosJugadores } from './mod-jugadores.js';
 import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
 import { todosLosEquipos } from './mod-equipos.js';
-import { todosLosPartidos } from './mod-partidos.js';
+import { todosLosPartidos, abrirEdicionPartido, abrirModalAccionPartido, recalcularResultadoPartido } from './mod-partidos.js';
 
 let partidoIdActivo = null;
 let partidoObj = null;
@@ -254,6 +254,17 @@ export function initDirecto() {
     document.getElementById('btn-close-modal-sustitucion').addEventListener('click', cerrarModalCambio);
     document.getElementById('btn-cancel-modal-sustitucion').addEventListener('click', cerrarModalCambio);
     document.getElementById('btn-save-modal-sustitucion').addEventListener('click', ejecutarCambio);
+
+    // Edición de titulares / acciones desde directo
+    document.getElementById('btn-edit-partido-directo')?.addEventListener('click', () => {
+        if (partidoObj) abrirEdicionPartido(partidoObj);
+    });
+    document.getElementById('btn-quick-edit-campo')?.addEventListener('click', () => {
+        if (partidoObj) abrirEdicionPartido(partidoObj);
+    });
+    document.getElementById('btn-add-accion-directo')?.addEventListener('click', () => {
+        if (partidoObj) abrirModalAccionPartido(partidoObj, null, null);
+    });
     
     renderAcciones();
 }
@@ -1058,18 +1069,31 @@ function renderEfemerides() {
                     <div class="text-xs sm:text-sm font-bold text-slate-600 mb-0.5 truncate">${e.nombre}</div>
                     <div class="text-[10px] sm:text-xs truncate">${desc}</div>
                 </div>
-                <button class="require-editor btn-del-efemeride text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 transition-opacity p-1 sm:p-2 shrink-0" data-id="${e.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                <div class="flex items-center gap-0.5 shrink-0">
+                    <button class="require-editor btn-edit-efemeride text-slate-300 hover:text-blue-500 md:opacity-0 group-hover:opacity-100 transition-opacity p-1 sm:p-2" data-id="${e.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button class="require-editor btn-del-efemeride text-slate-300 hover:text-red-500 md:opacity-0 group-hover:opacity-100 transition-opacity p-1 sm:p-2" data-id="${e.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
             </div>
         `;
     }).join('');
+
+    container.querySelectorAll('.btn-edit-efemeride').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            const id = ev.currentTarget.getAttribute('data-id');
+            const ef = efemeridesList.find(x => x.id === id);
+            if (ef && partidoObj) {
+                abrirModalAccionPartido(partidoObj, ef, null);
+            }
+        });
+    });
 
     container.querySelectorAll('.btn-del-efemeride').forEach(btn => {
         btn.addEventListener('click', async (ev) => {
             const id = ev.currentTarget.getAttribute('data-id');
             if (await confirmarAccion("¿Eliminar este registro?")) {
-                // If it was a substitution, maybe we should warn that enCampo wasn't reverted, but for now just delete the record so it doesn't count in statistics.
                 try {
                     await deleteDoc(doc(db, 'partidos', partidoIdActivo, 'efemerides', id));
+                    await recalcularResultadoPartido(partidoIdActivo);
                     mostrarNotificacion("Registro eliminado");
                 } catch(err) {
                     mostrarNotificacion("Error al eliminar", true);
