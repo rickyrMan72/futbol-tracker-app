@@ -14,6 +14,7 @@ let viewModePartidos = localStorage.getItem('partidosViewMode') || 'cards';
 let partidosEventsBound = false;
 
 let currentShareText = "";
+let currentStatsPartido = null;
 
 function actualizarBotonHistoricos() {
     const btn = document.getElementById('btn-toggle-historicos');
@@ -102,73 +103,150 @@ export function initPartidos() {
         }
     });
 
-    document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
+    document.getElementById('btn-export-pdf')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-export-pdf');
         const element = document.getElementById('stats-content-to-export');
-        if (!element) return;
-        
-        // Prepare for PDF export by expanding scrollable containers
-        const timelineScroll = document.getElementById('stats-timeline-scroll');
-        const playersListWrapper = document.getElementById('stats-players-list').closest('.overflow-x-auto');
-        const exportGrid = document.getElementById('stats-export-grid');
-        
-        element.classList.remove('overflow-y-auto');
-        if (timelineScroll) {
-            timelineScroll.classList.remove('overflow-y-auto', 'max-h-[400px]');
-        }
-        if (playersListWrapper) {
-            playersListWrapper.classList.remove('overflow-x-auto');
-        }
-        if (exportGrid) {
-            exportGrid.classList.remove('md:grid-cols-2');
+        if (!element) {
+            mostrarNotificacion("No se encontró el contenido para exportar", true);
+            return;
         }
 
-        const opt = {
-          margin:       0.5,
-          filename:     'estadisticas-partido.pdf',
-          image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2 },
-          jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
-          pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-        
-        html2pdf().set(opt).from(element).outputPdf('blob').then((pdfBlob) => {
-            // Restore original classes
-            element.classList.add('overflow-y-auto');
-            if (timelineScroll) {
-                timelineScroll.classList.add('overflow-y-auto', 'max-h-[400px]');
+        const originalBtnHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Generando PDF...';
+        }
+
+        mostrarNotificacion("Generando PDF del partido...", false);
+
+        try {
+            // Asegurar disponibilidad de html2pdf
+            if (typeof window.html2pdf === 'undefined') {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+                    s.onload = resolve;
+                    s.onerror = () => reject(new Error("No se pudo cargar el módulo generador de PDF"));
+                    document.head.appendChild(s);
+                });
             }
-            if (playersListWrapper) {
-                playersListWrapper.classList.add('overflow-x-auto');
+
+            const rivalSlug = (currentStatsPartido?.rival || 'rival').toLowerCase().replace(/[^a-z0-9]/g, '-');
+            const fechaSlug = currentStatsPartido?.fecha || new Date().toISOString().split('T')[0];
+            const filename = `estadisticas-${rivalSlug}-${fechaSlug}.pdf`;
+
+            const opt = {
+                margin:       [8, 8, 8, 8],
+                filename:     filename,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  {
+                    scale: 2,
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false,
+                    onclone: (clonedDoc) => {
+                        const clonedExport = clonedDoc.getElementById('stats-content-to-export');
+                        if (clonedExport) {
+                            clonedExport.style.maxHeight = 'none';
+                            clonedExport.style.overflow = 'visible';
+                            clonedExport.style.height = 'auto';
+                        }
+                        // Ocultar botones de acción y edición dentro del PDF generado
+                        clonedDoc.querySelectorAll('#btn-add-accion-stats, #btn-toggle-orden-stats, .btn-del-accion-stats, .require-editor').forEach(el => {
+                            el.style.display = 'none';
+                        });
+                        // Expandir timeline para que salgan todos los eventos
+                        const clonedTl = clonedDoc.getElementById('stats-timeline-scroll');
+                        if (clonedTl) {
+                            clonedTl.style.maxHeight = 'none';
+                            clonedTl.style.overflow = 'visible';
+                        }
+                        // Expandir tabla de jugadores
+                        const clonedPlayers = clonedDoc.getElementById('stats-players-list');
+                        if (clonedPlayers) {
+                            const wrapper = clonedPlayers.closest('.overflow-x-auto');
+                            if (wrapper) wrapper.style.overflow = 'visible';
+                        }
+                        // Asegurar que los canvas dibujados (gráficos Chart.js) se copien al clon
+                        const origCanvases = element.querySelectorAll('canvas');
+                        const clonedCanvases = clonedDoc.querySelectorAll('canvas');
+                        origCanvases.forEach((orig, idx) => {
+                            const dest = clonedCanvases[idx];
+                            if (dest && orig && orig.width > 0 && orig.height > 0) {
+                                try {
+                                    const ctx = dest.getContext('2d');
+                                    if (ctx) {
+                                        dest.width = orig.width;
+                                        dest.height = orig.height;
+                                        ctx.drawImage(orig, 0, 0);
+                                    }
+                                } catch (e) {
+                                    console.warn("No se pudo copiar canvas al clon de PDF:", e);
+                                }
+                            }
+                        });
+                    }
+                },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            let pdfBlob = null;
+            try {
+                pdfBlob = await window.html2pdf().set(opt).from(element).outputPdf('blob');
+            } catch (blobErr) {
+                console.warn("outputPdf blob falló, intentando descarga directa con html2pdf.save():", blobErr);
+                await window.html2pdf().set(opt).from(element).save();
+                mostrarNotificacion("PDF descargado con éxito");
+                return;
             }
-            if (exportGrid) {
-                exportGrid.classList.add('md:grid-cols-2');
+
+            if (!pdfBlob) {
+                throw new Error("No se pudo generar el archivo PDF");
             }
-            
-            const file = new File([pdfBlob], "estadisticas-partido.pdf", { type: "application/pdf" });
+
+            const file = new File([pdfBlob], filename, { type: "application/pdf" });
+            let compartido = false;
+
+            // Intentar compartir vía Web Share API si el navegador y contexto lo soportan
             if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                navigator.share({
-                    title: 'Estadísticas del Partido',
-                    files: [file]
-                }).catch(err => console.log('Error al compartir', err));
-            } else {
-                // Fallback download if share not supported
+                try {
+                    await navigator.share({
+                        title: `Estadísticas: ${currentStatsPartido?.rival || 'Partido'}`,
+                        text: `Resumen de estadísticas del partido contra ${currentStatsPartido?.rival || 'el rival'}`,
+                        files: [file]
+                    });
+                    compartido = true;
+                    mostrarNotificacion("PDF compartido con éxito");
+                } catch (shareErr) {
+                    console.log("Compartir no disponible o cancelado por el usuario, procediendo a descarga directa:", shareErr);
+                }
+            }
+
+            // Si no se compartió (navegador en escritorio, iframe o usuario canceló share), descargar automáticamente
+            if (!compartido) {
                 const url = window.URL.createObjectURL(pdfBlob);
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = 'estadisticas-partido.pdf';
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
-                window.URL.revokeObjectURL(url);
-                a.remove();
+                setTimeout(() => {
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                }, 1500);
+                mostrarNotificacion("PDF descargado con éxito");
             }
-        }).catch(err => {
-            console.error("Error PDF:", err);
-            element.classList.add('overflow-y-auto');
-            if (timelineScroll) timelineScroll.classList.add('overflow-y-auto', 'max-h-[400px]');
-            if (playersListWrapper) playersListWrapper.classList.add('overflow-x-auto');
-            if (exportGrid) exportGrid.classList.add('md:grid-cols-2');
-        });
+        } catch (err) {
+            console.error("Error al exportar PDF:", err);
+            mostrarNotificacion("Error al generar PDF: " + (err.message || "desconocido"), true);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+        }
     });
 
     const prepPartido = () => {
@@ -739,6 +817,8 @@ async function abrirEstadisticas(par) {
     const modal = document.getElementById('modal-estadisticas');
     if (!modal) return;
     
+    currentStatsPartido = par;
+
     // Fetch efemerides
     modal.classList.remove('hidden');
     document.getElementById('stats-timeline-container').innerHTML = '<div class="text-center p-4"><i class="fa-solid fa-spinner fa-spin text-2xl text-slate-400"></i></div>';
@@ -747,8 +827,8 @@ async function abrirEstadisticas(par) {
     
     // Match info for PDF and summary
     const equipoActual = todosLosEquipos.find(eq => eq.id === par.equipoId) || { nombre: 'Mi Equipo', escudo: '' };
-    const escudoLocal = equipoActual.escudo ? `<img src="${equipoActual.escudo}" class="w-10 h-10 object-contain" alt="Local">` : `<div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
-    const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-10 h-10 object-contain" alt="Rival">` : `<div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+    const escudoLocal = equipoActual.escudo ? `<img src="${equipoActual.escudo}" class="w-10 h-10 object-contain" alt="Local" crossorigin="anonymous">` : `<div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
+    const escudoRivalImg = par.escudoRival ? `<img src="${par.escudoRival}" class="w-10 h-10 object-contain" alt="Rival" crossorigin="anonymous">` : `<div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><i class="fa-solid fa-shield"></i></div>`;
     const nomLocal = equipoActual.nombre;
     const nomRival = par.rival || 'Rival';
     
