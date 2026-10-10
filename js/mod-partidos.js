@@ -15,6 +15,10 @@ let partidosEventsBound = false;
 
 let currentShareText = "";
 let currentStatsPartido = null;
+let currentStatsEfemerides = [];
+let currentStatsJugadores = {};
+let currentStatsConfigAcc = [];
+let currentStatsResumen = {};
 
 function actualizarBotonHistoricos() {
     const btn = document.getElementById('btn-toggle-historicos');
@@ -103,11 +107,273 @@ export function initPartidos() {
         }
     });
 
+    function buildPdfExportElement() {
+        const par = currentStatsPartido || {};
+        const efemerides = currentStatsEfemerides || [];
+        const statsJugadores = currentStatsJugadores || {};
+        const configAcc = currentStatsConfigAcc || DEFAULT_ACCIONES;
+        const resumen = currentStatsResumen || {};
+
+        const wrapper = document.createElement('div');
+        wrapper.id = 'pdf-export-wrapper';
+        wrapper.style.width = '794px';
+        wrapper.style.backgroundColor = '#ffffff';
+        wrapper.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        wrapper.style.color = '#1e293b';
+        wrapper.style.boxSizing = 'border-box';
+
+        // 1. Obtener imágenes base64 de los gráficos para renderizado perfecto
+        let chart1Img = '';
+        let chart2Img = '';
+        if (window.statsChartInstance) {
+            try { chart1Img = window.statsChartInstance.toBase64Image(); } catch (e) { console.warn(e); }
+        }
+        if (!chart1Img) {
+            const c1 = document.getElementById('stats-chart');
+            if (c1 && c1.width > 0) { try { chart1Img = c1.toDataURL('image/png'); } catch (e) {} }
+        }
+
+        if (window.temporalChartInstance) {
+            try { chart2Img = window.temporalChartInstance.toBase64Image(); } catch (e) { console.warn(e); }
+        }
+        if (!chart2Img) {
+            const c2 = document.getElementById('stats-temporal-chart');
+            if (c2 && c2.width > 0) { try { chart2Img = c2.toDataURL('image/png'); } catch (e) {} }
+        }
+
+        // 2. Top 3 para Página 1
+        const getTop3 = (metricKey) => {
+            return Object.keys(statsJugadores).map(id => {
+                const jug = todosLosJugadores.find(j => j.id === id);
+                return {
+                    id,
+                    nombre: jug ? jug.nombre : 'Desconocido',
+                    dorsal: jug?.dorsal || '',
+                    valor: statsJugadores[id][metricKey] || 0
+                };
+            }).filter(p => p.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 3);
+        };
+
+        const top3FaltasRec = renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3('faltasRecibidas'));
+        const top3FaltasCom = renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3('faltasCometidas'));
+        const top3TPuerta = renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3('tPuerta'));
+        const top3TFuera = renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'));
+
+        // 3. Filas tabla de jugadores para Página 3
+        const filasJugadoresHtml = Object.keys(statsJugadores).map(id => {
+            const jug = todosLosJugadores.find(j => j.id === id);
+            if (!jug) return '';
+            const st = statsJugadores[id];
+            const val = Number(st.scoreValor % 1 === 0 ? st.scoreValor : st.scoreValor.toFixed(2));
+            const valColor = val > 0 ? '#10b981' : (val < 0 ? '#ef4444' : '#94a3b8');
+            const valSign = val > 0 ? '+' : '';
+            return `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 8px 10px; font-weight: 600; color: #1e293b;">
+                        #${jug.dorsal || '-'} ${jug.nombre}
+                    </td>
+                    <td style="padding: 8px 6px; text-align: center; color: #475569; font-weight: 600;">${st.mins}'</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #10b981; font-weight: 700;">${st.goles}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #f59e0b; font-weight: 700;">${st.asis}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #0284c7; font-weight: 600;">${st.tPuerta}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #64748b; font-weight: 600;">${st.tFuera}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #2563eb; font-weight: 600;">${st.faltasRecibidas}</td>
+                    <td style="padding: 8px 6px; text-align: center; color: #d97706; font-weight: 600;">${st.faltasCometidas}</td>
+                    <td style="padding: 8px 6px; text-align: center;">
+                        ${st.amarillas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 3px; font-size: 10px; font-weight: bold; margin-right: 2px;">${st.amarillas}A</span>` : ''}
+                        ${st.rojas > 0 ? `<span style="display: inline-block; padding: 1px 4px; background-color: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3; border-radius: 3px; font-size: 10px; font-weight: bold;">${st.rojas}R</span>` : ''}
+                        ${st.amarillas === 0 && st.rojas === 0 ? '<span style="color: #cbd5e1;">-</span>' : ''}
+                    </td>
+                    <td style="padding: 8px 8px; text-align: center; font-weight: 700; color: ${valColor};">${valSign}${val}</td>
+                </tr>
+            `;
+        }).join('');
+
+        // 4. Eventos del timeline para Página 4+
+        const ordenTimeline = localStorage.getItem('statsTimelineOrder') || 'asc';
+        const sortedEfems = [...efemerides].sort(ordenTimeline === 'desc' ? compararEfemeridesDesc : compararEfemeridesAsc);
+
+        const eventosTimelineHtml = sortedEfems.length === 0
+            ? '<div style="padding: 40px; text-align: center; color: #94a3b8; font-style: italic;">No hay acciones registradas en el partido.</div>'
+            : sortedEfems.map(ef => {
+                const eTipo = ef.tipo || ef.accionId;
+                const acc = configAcc.find(a => a.id === eTipo);
+                const icon = ef.icon || (acc ? acc.icon : 'fa-bolt');
+                const cl = ef.color || (acc ? acc.color : 'text-blue-500');
+                const nom = ef.nombre || (acc ? acc.nombre : eTipo);
+                const tInfo = extraerTiempoEfemeride(ef);
+                const displayTiempo = ef.tiempoAnotado || formatearTiempoAnotado(tInfo.min, tInfo.sec);
+                const isSust = (eTipo === 'sustitucion' || eTipo === 'sustitucion-lesion');
+
+                let jugadorDesc = ef.jugadorNombre ? `#${ef.jugadorDorsal || ''} ${ef.jugadorNombre}` : (ef.rival ? 'Rival' : 'Equipo');
+                if (isSust) {
+                    jugadorDesc = `<span style="color: #e11d48; font-weight: bold;">Sale: #${ef.jugadorDorsal || ''} ${ef.jugadorNombre || ''}</span> <i class="fa-solid fa-arrow-right-long" style="margin: 0 6px; color: #94a3b8;"></i> <span style="color: #16a34a; font-weight: bold;">Entra: #${ef.jugadorEntraDorsal || ''} ${ef.jugadorEntraNombre || ''}</span>`;
+                }
+
+                return `
+                    <div class="pdf-avoid-break" style="break-inside: avoid; page-break-inside: avoid; display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 8px;">
+                        <div style="width: 64px; text-align: center; border-right: 1px solid #f1f5f9; padding-right: 8px; flex-shrink: 0;">
+                            <span style="display: block; font-weight: 800; font-size: 13px; color: #0f172a;">${displayTiempo}</span>
+                            <span style="display: block; font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">${ef.periodo || '1ª Parte'}</span>
+                        </div>
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #f8fafc; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fa-solid ${icon} ${cl}" style="font-size: 14px;"></i>
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${nom}</div>
+                            <div style="font-size: 12px; color: #475569; margin-top: 1px;">${jugadorDesc}</div>
+                            ${ef.nota ? `<div style="font-size: 10px; color: #64748b; font-style: italic; margin-top: 2px;"><i class="fa-regular fa-comment" style="margin-right: 4px;"></i>${ef.nota}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        const resultadoTexto = par.resultado || `${resumen.golesMios || 0} - ${resumen.golesRival || 0}`;
+        const totAcc = resumen.totalAcciones || 0;
+        const pctPos = totAcc > 0 ? Math.round(((resumen.positivas || 0) / totAcc) * 100) : 0;
+
+        wrapper.innerHTML = `
+            <!-- ======================= PÁGINA 1: RESUMEN Y LÍDERES ======================= -->
+            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
+                <!-- Header Info Partido -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        ${resumen.eqIzdaEscudo || ''}
+                        <span style="font-size: 18px; font-weight: 800; color: #1e293b;">${resumen.eqIzdaNombre || 'Mi Equipo'}</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: center;">
+                        <span style="font-size: 11px; font-weight: 700; color: #64748b; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px 10px; border-radius: 9999px;">
+                            ${resumen.fechaHora || ''}
+                        </span>
+                        <span style="font-size: 24px; font-weight: 900; color: #0f172a; margin-top: 4px;">${resultadoTexto}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px; text-align: right;">
+                        <span style="font-size: 18px; font-weight: 800; color: #1e293b;">${resumen.eqDchaNombre || 'Rival'}</span>
+                        ${resumen.eqDchaEscudo || ''}
+                    </div>
+                </div>
+
+                <!-- Resumen Superior (3 tarjetas) -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px;">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Resultado Final</div>
+                        <div style="font-size: 26px; font-weight: 900; color: #1e293b; margin-top: 2px;">${resultadoTexto}</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Acciones</div>
+                        <div style="font-size: 26px; font-weight: 900; color: #2563eb; margin-top: 2px;">${totAcc}</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">% Acciones Positivas</div>
+                        <div style="font-size: 26px; font-weight: 900; color: #8b5cf6; margin-top: 2px;">${pctPos}%</div>
+                    </div>
+                </div>
+
+                <!-- Líderes del Partido (Top 3): Faltas arriba, Tiros abajo para que quepan bien los nombres -->
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
+                    <h4 style="font-size: 14px; font-weight: 800; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 14px 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-trophy" style="color: #f59e0b;"></i> Líderes del Partido (Top 3)
+                    </h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+                        <div>${top3FaltasRec}</div>
+                        <div>${top3FaltasCom}</div>
+                        <div>${top3TPuerta}</div>
+                        <div>${top3TFuera}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================= PÁGINA 2: GRÁFICOS (ANCHO COMPLETO) ======================= -->
+            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
+            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px;">
+                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-chart-pie" style="color: #2563eb;"></i> Análisis Gráfico del Partido
+                    </h3>
+                </div>
+
+                <!-- Primera mitad: Distribución de Acciones ocupando todo el ancho -->
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                    <h4 style="font-size: 13px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-chart-column" style="color: #0284c7;"></i> Distribución de Acciones
+                    </h4>
+                    <div style="width: 100%; height: 310px; display: flex; align-items: center; justify-content: center; background: #fafafa; border-radius: 8px;">
+                        ${chart1Img ? `<img src="${chart1Img}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Distribución">` : '<span style="color: #94a3b8; font-style: italic; font-size: 13px;">Sin datos registrados</span>'}
+                    </div>
+                </div>
+
+                <!-- Segunda mitad: Evolución de Acciones ocupando todo el ancho -->
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;">
+                    <h4 style="font-size: 13px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-timeline" style="color: #6366f1;"></i> Evolución de Acciones en el Tiempo
+                    </h4>
+                    <div style="width: 100%; height: 310px; display: flex; align-items: center; justify-content: center; background: #fafafa; border-radius: 8px;">
+                        ${chart2Img ? `<img src="${chart2Img}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Evolución">` : '<span style="color: #94a3b8; font-style: italic; font-size: 13px;">Sin datos registrados</span>'}
+                    </div>
+                </div>
+            </div>
+
+            <!-- ======================= PÁGINA 3: RENDIMIENTO POR JUGADOR (ANCHO COMPLETO) ======================= -->
+            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
+            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px;">
+                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-users" style="color: #2563eb;"></i> Rendimiento por Jugador
+                    </h3>
+                    <p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">Desglose completo de acciones individuales de cada jugador en el partido.</p>
+                </div>
+
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; width: 100%;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                        <thead style="background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">
+                            <tr>
+                                <th style="padding: 10px 10px;">Jugador</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #2563eb;">Min</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #10b981;">Gol</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #f59e0b;">Asis</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #0284c7;">T.Puerta</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #64748b;">T.Fuera</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #2563eb;">F.Recib.</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #d97706;">F.Comet.</th>
+                                <th style="padding: 10px 6px; text-align: center; color: #e11d48;">Tarjetas</th>
+                                <th style="padding: 10px 8px; text-align: center; color: #6366f1;">Valoración</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filasJugadoresHtml || '<tr><td colspan="10" style="padding: 20px; text-align: center; color: #94a3b8;">No hay datos disponibles</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ======================= PÁGINA 4+: TIMELINE COMPLETO ======================= -->
+            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
+            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-clock-rotate-left" style="color: #2563eb;"></i> Timeline del Partido (Cronología Completa)
+                        </h3>
+                        <p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">Todas las acciones registradas en orden cronológico detallado.</p>
+                    </div>
+                    <span style="font-size: 11px; font-weight: 800; background: #f1f5f9; color: #334155; padding: 4px 10px; border-radius: 9999px;">
+                        ${sortedEfems.length} acciones
+                    </span>
+                </div>
+
+                <div style="width: 100%;">
+                    ${eventosTimelineHtml}
+                </div>
+            </div>
+        `;
+
+        return wrapper;
+    }
+
     document.getElementById('btn-export-pdf')?.addEventListener('click', async () => {
         const btn = document.getElementById('btn-export-pdf');
-        const element = document.getElementById('stats-content-to-export');
-        if (!element) {
-            mostrarNotificacion("No se encontró el contenido para exportar", true);
+        if (!currentStatsPartido) {
+            mostrarNotificacion("No hay estadísticas activas para exportar", true);
             return;
         }
 
@@ -117,8 +383,9 @@ export function initPartidos() {
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Generando PDF...';
         }
 
-        mostrarNotificacion("Generando PDF del partido...", false);
+        mostrarNotificacion("Generando PDF estructurado del partido...", false);
 
+        let printWrapper = null;
         try {
             // Asegurar disponibilidad de html2pdf
             if (typeof window.html2pdf === 'undefined') {
@@ -135,6 +402,13 @@ export function initPartidos() {
             const fechaSlug = currentStatsPartido?.fecha || new Date().toISOString().split('T')[0];
             const filename = `estadisticas-${rivalSlug}-${fechaSlug}.pdf`;
 
+            printWrapper = buildPdfExportElement();
+            printWrapper.style.position = 'fixed';
+            printWrapper.style.left = '-9999px';
+            printWrapper.style.top = '0';
+            printWrapper.style.zIndex = '-9999';
+            document.body.appendChild(printWrapper);
+
             const opt = {
                 margin:       [8, 8, 8, 8],
                 filename:     filename,
@@ -144,59 +418,19 @@ export function initPartidos() {
                     useCORS: true,
                     allowTaint: true,
                     logging: false,
-                    onclone: (clonedDoc) => {
-                        const clonedExport = clonedDoc.getElementById('stats-content-to-export');
-                        if (clonedExport) {
-                            clonedExport.style.maxHeight = 'none';
-                            clonedExport.style.overflow = 'visible';
-                            clonedExport.style.height = 'auto';
-                        }
-                        // Ocultar botones de acción y edición dentro del PDF generado
-                        clonedDoc.querySelectorAll('#btn-add-accion-stats, #btn-toggle-orden-stats, .btn-del-accion-stats, .require-editor').forEach(el => {
-                            el.style.display = 'none';
-                        });
-                        // Expandir timeline para que salgan todos los eventos
-                        const clonedTl = clonedDoc.getElementById('stats-timeline-scroll');
-                        if (clonedTl) {
-                            clonedTl.style.maxHeight = 'none';
-                            clonedTl.style.overflow = 'visible';
-                        }
-                        // Expandir tabla de jugadores
-                        const clonedPlayers = clonedDoc.getElementById('stats-players-list');
-                        if (clonedPlayers) {
-                            const wrapper = clonedPlayers.closest('.overflow-x-auto');
-                            if (wrapper) wrapper.style.overflow = 'visible';
-                        }
-                        // Asegurar que los canvas dibujados (gráficos Chart.js) se copien al clon
-                        const origCanvases = element.querySelectorAll('canvas');
-                        const clonedCanvases = clonedDoc.querySelectorAll('canvas');
-                        origCanvases.forEach((orig, idx) => {
-                            const dest = clonedCanvases[idx];
-                            if (dest && orig && orig.width > 0 && orig.height > 0) {
-                                try {
-                                    const ctx = dest.getContext('2d');
-                                    if (ctx) {
-                                        dest.width = orig.width;
-                                        dest.height = orig.height;
-                                        ctx.drawImage(orig, 0, 0);
-                                    }
-                                } catch (e) {
-                                    console.warn("No se pudo copiar canvas al clon de PDF:", e);
-                                }
-                            }
-                        });
-                    }
+                    width: 794,
+                    windowWidth: 794
                 },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+                pagebreak:    { mode: ['css', 'legacy'], before: '.html2pdf__page-break', avoid: '.pdf-avoid-break' }
             };
 
             let pdfBlob = null;
             try {
-                pdfBlob = await window.html2pdf().set(opt).from(element).outputPdf('blob');
+                pdfBlob = await window.html2pdf().set(opt).from(printWrapper).outputPdf('blob');
             } catch (blobErr) {
                 console.warn("outputPdf blob falló, intentando descarga directa con html2pdf.save():", blobErr);
-                await window.html2pdf().set(opt).from(element).save();
+                await window.html2pdf().set(opt).from(printWrapper).save();
                 mostrarNotificacion("PDF descargado con éxito");
                 return;
             }
@@ -242,6 +476,9 @@ export function initPartidos() {
             console.error("Error al exportar PDF:", err);
             mostrarNotificacion("Error al generar PDF: " + (err.message || "desconocido"), true);
         } finally {
+            if (printWrapper && printWrapper.parentNode) {
+                printWrapper.remove();
+            }
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = originalBtnHtml;
@@ -1050,6 +1287,23 @@ async function abrirEstadisticas(par) {
         if (st.mins < 0) st.mins = 0;
     });
     
+    currentStatsEfemerides = efemerides;
+    currentStatsJugadores = statsJugadores;
+    currentStatsConfigAcc = configAcc;
+    currentStatsResumen = {
+        eqIzdaEscudo,
+        eqIzdaNombre,
+        eqDchaEscudo,
+        eqDchaNombre,
+        fechaHora,
+        headerHtml,
+        golesMios,
+        golesRival,
+        totalAcciones,
+        positivas,
+        minFinal
+    };
+
     document.getElementById('stats-global-container').innerHTML = `
         <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
             <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">Resultado Final</h5>
@@ -1092,20 +1346,27 @@ async function abrirEstadisticas(par) {
         if (!jug) return '';
         const st = statsJugadores[id];
         const val = Number(st.scoreValor % 1 === 0 ? st.scoreValor : st.scoreValor.toFixed(2));
-        let pColor = val > 0 ? 'text-emerald-500' : (val < 0 ? 'text-red-500' : 'text-slate-400');
+        let pColor = val > 0 ? 'text-emerald-500 font-bold' : (val < 0 ? 'text-red-500 font-bold' : 'text-slate-400');
         return `
             <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0 md:table-row">
                 <td class="px-3 py-2 font-medium">#${jug.dorsal || '-'} ${jug.nombre}</td>
-                <td class="px-3 py-2 text-center text-slate-600 font-bold">${st.mins}'</td>
-                <td class="px-3 py-2 text-center text-slate-600 font-bold">${st.tPuerta}</td>
-                <td class="px-3 py-2 text-center text-slate-600 font-bold">${st.tFuera}</td>
-                <td class="px-3 py-2 text-center text-slate-600 font-bold">${st.goles}</td>
-                <td class="px-3 py-2 text-center text-slate-600 font-bold">${st.asis}</td>
-                <td class="px-3 py-2 text-center font-bold ${pColor}" title="Valoración: ${val}">${val > 0 ? '+'+val : val}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.mins}'</td>
+                <td class="px-2 py-2 text-center text-emerald-600 font-bold">${st.goles}</td>
+                <td class="px-2 py-2 text-center text-amber-600 font-bold">${st.asis}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.tPuerta}</td>
+                <td class="px-2 py-2 text-center text-slate-600 font-bold">${st.tFuera}</td>
+                <td class="px-2 py-2 text-center text-blue-600 font-bold">${st.faltasRecibidas}</td>
+                <td class="px-2 py-2 text-center text-amber-700 font-bold">${st.faltasCometidas}</td>
+                <td class="px-2 py-2 text-center font-bold">
+                    ${st.amarillas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] mr-1">${st.amarillas}A</span>` : ''}
+                    ${st.rojas > 0 ? `<span class="inline-block px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded text-[10px]">${st.rojas}R</span>` : ''}
+                    ${st.amarillas === 0 && st.rojas === 0 ? '<span class="text-slate-300">-</span>' : ''}
+                </td>
+                <td class="px-2 py-2 text-center font-bold ${pColor}" title="Valoración: ${val}">${val > 0 ? '+'+val : val}</td>
             </tr>
         `;
     }).join('');
-    document.getElementById('stats-players-list').innerHTML = jugListHTML || `<tr><td colspan="7" class="p-4 text-center text-slate-500 text-sm">No hay datos de jugadores</td></tr>`;
+    document.getElementById('stats-players-list').innerHTML = jugListHTML || `<tr><td colspan="10" class="p-4 text-center text-slate-500 text-sm">No hay datos de jugadores</td></tr>`;
     
     let ordenTimelineStats = localStorage.getItem('statsTimelineOrder') || 'asc';
 
