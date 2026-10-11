@@ -21,6 +21,44 @@ let currentStatsConfigAcc = [];
 let currentStatsResumen = {};
 let currentStatsChartPayload = null;
 
+// Helper to draw Font Awesome icon on canvas for scatter charts
+function getIconCanvas(iconClass, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 24;
+    canvas.height = 24;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return canvas;
+
+    try {
+        const el = document.createElement('i');
+        el.className = `fa-solid ${iconClass || 'fa-circle'}`;
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        let unicode = window.getComputedStyle(el, '::before').getPropertyValue('content');
+        document.body.removeChild(el);
+
+        if (unicode && unicode !== 'none') {
+            unicode = unicode.replace(/['"]/g, '');
+            ctx.font = '900 16px "Font Awesome 6 Free"';
+            ctx.fillStyle = color || '#2563eb';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(unicode, 12, 12);
+        } else {
+            ctx.fillStyle = color || '#2563eb';
+            ctx.beginPath();
+            ctx.arc(12, 12, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } catch (e) {
+        ctx.fillStyle = color || '#2563eb';
+        ctx.beginPath();
+        ctx.arc(12, 12, 6, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    return canvas;
+}
+
 function actualizarBotonHistoricos() {
     const btn = document.getElementById('btn-toggle-historicos');
     if (!btn) return;
@@ -107,36 +145,6 @@ export function initPartidos() {
             });
         }
     });
-
-    // Helper to draw Font Awesome icon on canvas for scatter charts
-    function getIconCanvas(iconClass, color) {
-        const canvas = document.createElement('canvas');
-        canvas.width = 24;
-        canvas.height = 24;
-        const ctx = canvas.getContext('2d');
-        
-        const el = document.createElement('i');
-        el.className = `fa-solid ${iconClass}`;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-        let unicode = window.getComputedStyle(el, '::before').getPropertyValue('content');
-        document.body.removeChild(el);
-        
-        if (unicode && unicode !== 'none') {
-            unicode = unicode.replace(/['"]/g, '');
-            ctx.font = '900 16px "Font Awesome 6 Free"';
-            ctx.fillStyle = color;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(unicode, 12, 12);
-        } else {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(12, 12, 6, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        return canvas;
-    }
 
     function buildPdfExportElement() {
         const par = currentStatsPartido || {};
@@ -1794,36 +1802,40 @@ async function abrirEstadisticas(par) {
                 }
             });
             
-            if (temporalCanvas) {
-                 const tDatasets = Object.keys(temporalData).map(accKey => {
-                     const color = colorByAcc[accKey];
-                     return {
-                         label: accKey,
-                         data: temporalData[accKey],
-                         pointStyle: getIconCanvas(iconByAcc[accKey], color),
-                         pointRadius: 8,
-                         pointHoverRadius: 10,
-                         pointBorderWidth: 0,
-                         backgroundColor: color,
-                         borderColor: color,
-                         showLine: false
-                     };
-                 });
-                 window.temporalChartInstance = new Chart(temporalCanvas, {
-                     type: 'scatter',
-                     data: { datasets: tDatasets },
-                     options: {
-                         responsive: true,
-                         maintainAspectRatio: false,
-                         plugins: { 
-                             legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } }
-                         },
-                         scales: {
-                             x: { type: 'linear', min: 0, max: minFinal > 0 ? minFinal : 90, title: { display: true, text: 'Minutos', font: {size: 11} } },
-                             y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Acumulado', font: {size: 11} } }
-                         }
-                     }
-                 });
+            if (temporalCanvas && Object.keys(temporalData).length > 0) {
+                try {
+                    const tDatasets = Object.keys(temporalData).map(accKey => {
+                        const color = colorByAcc[accKey] || '#2563eb';
+                        return {
+                            label: accKey,
+                            data: temporalData[accKey],
+                            pointStyle: getIconCanvas(iconByAcc[accKey] || 'fa-circle', color),
+                            pointRadius: 8,
+                            pointHoverRadius: 10,
+                            pointBorderWidth: 0,
+                            backgroundColor: color,
+                            borderColor: color,
+                            showLine: false
+                        };
+                    });
+                    window.temporalChartInstance = new Chart(temporalCanvas, {
+                        type: 'scatter',
+                        data: { datasets: tDatasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { 
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } }
+                            },
+                            scales: {
+                                x: { type: 'linear', min: 0, max: minFinal > 0 ? minFinal : 90, title: { display: true, text: 'Minutos', font: {size: 11} } },
+                                y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Acumulado', font: {size: 11} } }
+                            }
+                        }
+                    });
+                } catch (tempErr) {
+                    console.error("Error inicializando temporalChartInstance:", tempErr);
+                }
             }
         }
     } else {
