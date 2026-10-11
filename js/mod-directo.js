@@ -1,6 +1,6 @@
 import { db, collection, addDoc, onSnapshot, doc, updateDoc, arrayRemove, arrayUnion, deleteDoc, auth, query, where } from './firebase-config.js';
 import { mostrarNotificacion, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesDesc, formatearTiempoAnotado } from './ui.js';
-import { todosLosJugadores } from './mod-jugadores.js';
+import { todosLosJugadores, equipoIdActivo, setEquipoActivo } from './mod-jugadores.js';
 import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { todosLosPartidos, abrirEdicionPartido, abrirModalAccionPartido, recalcularResultadoPartido } from './mod-partidos.js';
@@ -272,7 +272,51 @@ export function initDirecto() {
         if (partidoObj) abrirModalAccionPartido(partidoObj, null, null);
     });
     
+    document.addEventListener('equipoModificado', () => {
+        if (partidoIdActivo && partidoObj) {
+            renderJugadoresEnCampo();
+        }
+    });
+
     renderAcciones();
+}
+
+
+function sincronizarTitularesEnCampo() {
+    if (!partidoObj) return;
+    const titulares = partidoObj.titulares || [];
+    const convocados = partidoObj.convocados || [];
+    
+    if (!partidoObj.enCampo || partidoObj.enCampo.length === 0) {
+        partidoObj.enCampo = [...titulares];
+    } else {
+        // IDs que han salido del campo por sustitución
+        const idsSustituidos = (efemeridesList || [])
+            .filter(ef => (ef.tipo === 'sustitucion' || ef.tipo === 'sustitucion-lesion' || ef.tipo === 'cambio') && (ef.jugadorId || ef.jugadorSaleId))
+            .map(ef => ef.jugadorId || ef.jugadorSaleId);
+
+        let huboCambios = false;
+        // Si hay titulares marcados que no están en el campo y no han sido sustituidos, añadirlos
+        titulares.forEach(titId => {
+            if (!idsSustituidos.includes(titId) && !partidoObj.enCampo.includes(titId)) {
+                if (convocados.length === 0 || convocados.includes(titId)) {
+                    partidoObj.enCampo.push(titId);
+                    huboCambios = true;
+                }
+            }
+        });
+
+        // Asegurar que si alguien fue desmarcado de la convocatoria no siga en el campo
+        if (convocados.length > 0) {
+            const antes = partidoObj.enCampo.length;
+            partidoObj.enCampo = partidoObj.enCampo.filter(id => convocados.includes(id));
+            if (partidoObj.enCampo.length !== antes) huboCambios = true;
+        }
+
+        if (huboCambios && partidoIdActivo) {
+            updateDoc(doc(db, 'partidos', partidoIdActivo), { enCampo: partidoObj.enCampo }).catch(e => console.error('Error al sincronizar titulares:', e));
+        }
+    }
 }
 
 function abrirDirecto(id) {
@@ -301,12 +345,15 @@ function abrirDirecto(id) {
         partidoObj = { id: docSnap.id, ...docSnap.data() };
         
         // Safety initialization if match doesn't have tracking fields yet
+        if (partidoObj.equipoId && partidoObj.equipoId !== equipoIdActivo) {
+            setEquipoActivo(partidoObj.equipoId);
+        }
+
         if (!partidoObj.cronometro) {
             partidoObj.cronometro = { estado: 'pausado', ultimoInicioTimer: 0, tiempoAcumulado: 0, periodo: '1ª Parte' };
         }
-        if (!partidoObj.enCampo) {
-            partidoObj.enCampo = partidoObj.titulares || [];
-        }
+
+        sincronizarTitularesEnCampo();
 
         if (rolesModalOpen) {
             renderModalRoles();
@@ -328,6 +375,8 @@ function abrirDirecto(id) {
             snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
             efemeridesList.sort(compararEfemeridesDesc); // Mas recientes en el partido primero
             renderEfemerides();
+            sincronizarTitularesEnCampo();
+            renderJugadoresEnCampo();
         }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
     }
 
@@ -656,7 +705,10 @@ function renderJugadoresEnCampo() {
         return;
     }
 
-    const jugadoresObj = todosLosJugadores.filter(j => enCampo.includes(j.id));
+    const jugadoresObj = enCampo.map(id => {
+        const found = todosLosJugadores.find(j => j.id === id);
+        return found || { id, nombre: 'Jugador', dorsal: '?', posicion: '' };
+    });
     jugadoresObj.sort(compararJugadoresPorPosicion);
 
     container.innerHTML = jugadoresObj.map(j => {
