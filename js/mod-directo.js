@@ -627,6 +627,24 @@ function updateCronoUI() {
 
 
 // --------------------------------- JUGADORES ---------------------------------
+
+function getOrdenPosicion(pos) {
+    if (!pos) return 99;
+    const p = pos.toLowerCase().trim();
+    if (p.includes('porter') || p.includes('arquero') || p === 'por') return 1;
+    if (p.includes('lateral') || p.includes('carriler') || p.includes('central') || p.includes('defens') || p === 'df' || p === 'def') return 2;
+    if (p.includes('mediocentro') || p.includes('medio') || p.includes('centrocamp') || p.includes('pivote') || p.includes('interior') || p.includes('mediapunta') || p.includes('volante') || p === 'mc' || p === 'cen') return 3;
+    if (p.includes('delanter') || p.includes('extremo') || p.includes('punta') || p.includes('ariete') || p === 'del' || p === 'dc') return 4;
+    return 5;
+}
+
+function compararJugadoresPorPosicion(a, b) {
+    const ordenA = getOrdenPosicion(a.posicion);
+    const ordenB = getOrdenPosicion(b.posicion);
+    if (ordenA !== ordenB) return ordenA - ordenB;
+    return (parseInt(a.dorsal) || 0) - (parseInt(b.dorsal) || 0);
+}
+
 function renderJugadoresEnCampo() {
     const container = document.getElementById('directo-jugadores-list');
     const enCampo = partidoObj?.enCampo || [];
@@ -639,7 +657,7 @@ function renderJugadoresEnCampo() {
     }
 
     const jugadoresObj = todosLosJugadores.filter(j => enCampo.includes(j.id));
-    jugadoresObj.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+    jugadoresObj.sort(compararJugadoresPorPosicion);
 
     container.innerHTML = jugadoresObj.map(j => {
         const isSelected = j.id === jugadorSeleccionadoId;
@@ -1088,7 +1106,7 @@ function abrirModalSustitucion() {
     // Banquillo = Convocados que no están enCampo
     const banquilloIds = convocados.filter(id => !enCampo.includes(id));
     const jugadoresBanquillo = todosLosJugadores.filter(j => banquilloIds.includes(j.id));
-    jugadoresBanquillo.sort((a,b) => (parseInt(a.dorsal)||0) - (parseInt(b.dorsal)||0));
+    jugadoresBanquillo.sort(compararJugadoresPorPosicion);
 
     if (jugadoresBanquillo.length === 0) {
         banquilloContainer.innerHTML = '<div class="text-slate-400 p-4 text-center">No hay jugadores en el banquillo.</div>';
