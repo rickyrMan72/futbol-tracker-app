@@ -385,19 +385,121 @@ async function toggleCrono() {
     }
 }
 
+function dialogOpcionesFin2daParte() {
+    return new Promise(resolve => {
+        document.querySelectorAll('.confirm-overlay-dialog').forEach(el => el.remove());
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay-dialog fixed inset-0 bg-slate-900 bg-opacity-60 z-[70] flex items-center justify-center p-4 fade-in';
+        overlay.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center">
+                <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Fin del 2º Tiempo</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mb-6">¿Deseas dar por finalizado el partido o disputar prórroga?</p>
+                <div class="flex flex-col gap-2.5">
+                    <button id="btn-choice-finalizar" class="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm transition-colors text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-flag-checkered"></i> Finalizar Partido
+                    </button>
+                    <button id="btn-choice-prorroga" class="w-full py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-forward-step"></i> Jugar Prórroga
+                    </button>
+                    <button id="btn-choice-cancelar" class="w-full py-2 px-4 text-slate-500 hover:text-slate-700 font-medium text-xs mt-1 transition-colors">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const close = (val) => {
+            overlay.remove();
+            resolve(val);
+        };
+
+        overlay.querySelector('#btn-choice-finalizar').addEventListener('click', () => close('Finalizado'), { once: true });
+        overlay.querySelector('#btn-choice-prorroga').addEventListener('click', () => close('Prórroga 1'), { once: true });
+        overlay.querySelector('#btn-choice-cancelar').addEventListener('click', () => close(null), { once: true });
+    });
+}
+
+function dialogOpcionesFinProrroga() {
+    return new Promise(resolve => {
+        document.querySelectorAll('.confirm-overlay-dialog').forEach(el => el.remove());
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay-dialog fixed inset-0 bg-slate-900 bg-opacity-60 z-[70] flex items-center justify-center p-4 fade-in';
+        overlay.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center">
+                <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                    <i class="fa-solid fa-flag-checkered"></i>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">Fin de la Prórroga</h3>
+                <p class="text-slate-500 text-xs sm:text-sm mb-6">¿Deseas finalizar el partido o pasar a tanda de penaltis?</p>
+                <div class="flex flex-col gap-2.5">
+                    <button id="btn-choice-finalizar-pro" class="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm transition-colors text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-flag-checkered"></i> Finalizar Partido
+                    </button>
+                    <button id="btn-choice-penaltis-pro" class="w-full py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-futbol"></i> Tanda de Penaltis
+                    </button>
+                    <button id="btn-choice-cancelar-pro" class="w-full py-2 px-4 text-slate-500 hover:text-slate-700 font-medium text-xs mt-1 transition-colors">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const close = (val) => {
+            overlay.remove();
+            resolve(val);
+        };
+
+        overlay.querySelector('#btn-choice-finalizar-pro').addEventListener('click', () => close('Finalizado'), { once: true });
+        overlay.querySelector('#btn-choice-penaltis-pro').addEventListener('click', () => close('Penaltis'), { once: true });
+        overlay.querySelector('#btn-choice-cancelar-pro').addEventListener('click', () => close(null), { once: true });
+    });
+}
+
 async function avanzarPeriodo() {
     if (!partidoObj) return;
-    const periodos = ['1ª Parte', '2ª Parte', 'Prórroga 1', 'Prórroga 2', 'Penaltis'];
-    const c = partidoObj.cronometro;
-    
-    let idx = periodos.indexOf(c.periodo);
-    let nextPeriodo = periodos[idx + 1] || 'Finalizado';
+    const c = partidoObj.cronometro || { estado: 'pausado', ultimoInicioTimer: 0, tiempoAcumulado: 0, periodo: '1ª Parte' };
+    const periodoActual = c.periodo || '1ª Parte';
+    let nextPeriodo = '2ª Parte';
+
+    if (periodoActual === '1ª Parte') {
+        nextPeriodo = '2ª Parte';
+    } else if (periodoActual === '2ª Parte') {
+        const choice = await dialogOpcionesFin2daParte();
+        if (!choice) return;
+        nextPeriodo = choice;
+    } else if (periodoActual === 'Prórroga 1') {
+        nextPeriodo = 'Prórroga 2';
+    } else if (periodoActual === 'Prórroga 2') {
+        const choice = await dialogOpcionesFinProrroga();
+        if (!choice) return;
+        nextPeriodo = choice;
+    } else if (periodoActual === 'Penaltis') {
+        const conf = await confirmarAccion("¿Dar por finalizado el partido definitivamente?", "Finalizar", "text-rose-600");
+        if (!conf) return;
+        nextPeriodo = 'Finalizado';
+    } else {
+        nextPeriodo = 'Finalizado';
+    }
 
     const ahora = Date.now();
-    let nuevoTiempoAcu = c.tiempoAcumulado;
-    if (c.estado === 'corriendo') {
+    let nuevoTiempoAcu = c.tiempoAcumulado || 0;
+    if (c.estado === 'corriendo' && c.ultimoInicioTimer) {
         nuevoTiempoAcu += (ahora - c.ultimoInicioTimer);
     }
+
+    // Actualización inmediata local en la UI para feedback instantáneo
+    partidoObj.cronometro.estado = 'pausado';
+    partidoObj.cronometro.ultimoInicioTimer = 0;
+    partidoObj.cronometro.tiempoAcumulado = nuevoTiempoAcu;
+    partidoObj.cronometro.periodo = nextPeriodo;
+    updateCronoUI();
+    manejarIntervaloCrono();
 
     try {
         await updateDoc(doc(db, 'partidos', partidoIdActivo), {
@@ -406,7 +508,14 @@ async function avanzarPeriodo() {
             'cronometro.tiempoAcumulado': nuevoTiempoAcu,
             'cronometro.periodo': nextPeriodo
         });
-    } catch(err) {}
+        if (nextPeriodo === 'Finalizado') {
+            mostrarNotificacion("Partido finalizado");
+        } else {
+            mostrarNotificacion(`Periodo actual: ${nextPeriodo}`);
+        }
+    } catch(err) {
+        mostrarNotificacion("Error al actualizar periodo", true);
+    }
 }
 
 function manejarIntervaloCrono() {
@@ -466,7 +575,36 @@ function updateCronoUI() {
     } else {
         btnNext.classList.remove('hidden');
         campoContainer.classList.remove('pointer-events-none', 'opacity-70');
-        // El de acciones se controla por seleccionarJugador, no limpiar en update cíclico
+
+        // Actualizar dinámicamente texto, icono, título y estilo del botón de periodo
+        const periodoActual = c.periodo || '1ª Parte';
+        if (periodoActual === '2ª Parte') {
+            btnNext.innerHTML = '<span>Finalizar</span> <i class="fa-solid fa-flag-checkered ml-1.5 sm:ml-2"></i>';
+            btnNext.setAttribute('title', 'Finalizar Partido');
+            btnNext.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            btnNext.classList.add('bg-rose-600', 'hover:bg-rose-700');
+        } else if (periodoActual === 'Prórroga 1') {
+            btnNext.innerHTML = '<span>Prórroga 2</span> <i class="fa-solid fa-forward-step ml-1.5 sm:ml-2"></i>';
+            btnNext.setAttribute('title', 'Pasar a Prórroga 2');
+            btnNext.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+            btnNext.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        } else if (periodoActual === 'Prórroga 2') {
+            btnNext.innerHTML = '<span>Penaltis / Fin</span> <i class="fa-solid fa-flag-checkered ml-1.5 sm:ml-2"></i>';
+            btnNext.setAttribute('title', 'Fin de Prórroga / Penaltis');
+            btnNext.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            btnNext.classList.add('bg-rose-600', 'hover:bg-rose-700');
+        } else if (periodoActual === 'Penaltis') {
+            btnNext.innerHTML = '<span>Finalizar</span> <i class="fa-solid fa-flag-checkered ml-1.5 sm:ml-2"></i>';
+            btnNext.setAttribute('title', 'Finalizar Partido');
+            btnNext.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            btnNext.classList.add('bg-rose-600', 'hover:bg-rose-700');
+        } else {
+            // '1ª Parte' o inicial
+            btnNext.innerHTML = '<span>2ª Parte</span> <i class="fa-solid fa-forward-step ml-1.5 sm:ml-2"></i>';
+            btnNext.setAttribute('title', 'Pasar a 2ª Parte');
+            btnNext.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+            btnNext.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }
 
         if (c.estado === 'corriendo') {
             btnStart.classList.add('hidden');
