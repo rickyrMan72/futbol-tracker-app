@@ -19,6 +19,7 @@ let currentStatsEfemerides = [];
 let currentStatsJugadores = {};
 let currentStatsConfigAcc = [];
 let currentStatsResumen = {};
+let currentStatsChartPayload = null;
 
 function actualizarBotonHistoricos() {
     const btn = document.getElementById('btn-toggle-historicos');
@@ -107,6 +108,36 @@ export function initPartidos() {
         }
     });
 
+    // Helper to draw Font Awesome icon on canvas for scatter charts
+    function getIconCanvas(iconClass, color) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 24;
+        canvas.height = 24;
+        const ctx = canvas.getContext('2d');
+        
+        const el = document.createElement('i');
+        el.className = `fa-solid ${iconClass}`;
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        let unicode = window.getComputedStyle(el, '::before').getPropertyValue('content');
+        document.body.removeChild(el);
+        
+        if (unicode && unicode !== 'none') {
+            unicode = unicode.replace(/['"]/g, '');
+            ctx.font = '900 16px "Font Awesome 6 Free"';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(unicode, 12, 12);
+        } else {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(12, 12, 6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        return canvas;
+    }
+
     function buildPdfExportElement() {
         const par = currentStatsPartido || {};
         const efemerides = currentStatsEfemerides || [];
@@ -123,10 +154,146 @@ export function initPartidos() {
         wrapper.style.color = '#1e293b';
         wrapper.style.boxSizing = 'border-box';
 
-        // 1. Obtener imágenes base64 de los gráficos para renderizado perfecto
+        // 1. Obtener imágenes base64 de los gráficos a alta resolución y ancho completo (1400px)
         let chart1Img = '';
         let chart2Img = '';
-        if (window.statsChartInstance) {
+
+        if (currentStatsChartPayload && window.Chart) {
+            // Distribución de Acciones en canvas offscreen de 1400px de ancho
+            try {
+                const offCanvas1 = document.createElement('canvas');
+                offCanvas1.width = 1400;
+                offCanvas1.height = 420;
+                const ctx1 = offCanvas1.getContext('2d');
+                ctx1.fillStyle = '#ffffff';
+                ctx1.fillRect(0, 0, 1400, 420);
+
+                const c1 = new Chart(offCanvas1, {
+                    type: 'bar',
+                    data: {
+                        labels: currentStatsChartPayload.distribucionLabels,
+                        datasets: [{
+                            label: 'Número de acciones',
+                            data: currentStatsChartPayload.distribucionData,
+                            backgroundColor: 'rgba(56, 189, 248, 0.75)',
+                            borderColor: 'rgb(14, 165, 233)',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: false,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        layout: {
+                            padding: { left: 10, right: 15, top: 10, bottom: 5 }
+                        },
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { font: { size: 12, weight: 'bold' }, color: '#334155' }, grid: { display: false } },
+                            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: '#475569' }, grid: { color: '#f1f5f9' } }
+                        }
+                    }
+                });
+                chart1Img = offCanvas1.toDataURL('image/png');
+                c1.destroy();
+            } catch (e) {
+                console.warn("Error generando offscreen chart 1:", e);
+            }
+
+            // Evolución de Acciones en canvas offscreen ocupando todo el ancho sin márgenes vacíos
+            try {
+                const offCanvas2 = document.createElement('canvas');
+                offCanvas2.width = 1400;
+                offCanvas2.height = 460;
+                const ctx2 = offCanvas2.getContext('2d');
+                ctx2.fillStyle = '#ffffff';
+                ctx2.fillRect(0, 0, 1400, 460);
+
+                const tData = currentStatsChartPayload.temporalData;
+                const cByAcc = currentStatsChartPayload.colorByAcc;
+                const iByAcc = currentStatsChartPayload.iconByAcc;
+                const mFinal = currentStatsChartPayload.minFinal > 0 ? currentStatsChartPayload.minFinal : 90;
+
+                const tDatasets = Object.keys(tData).map(accKey => {
+                    const color = cByAcc[accKey] || '#2563eb';
+                    return {
+                        label: accKey,
+                        data: tData[accKey],
+                        pointStyle: getIconCanvas(iByAcc[accKey], color),
+                        pointRadius: 9,
+                        pointBorderWidth: 0,
+                        backgroundColor: color,
+                        borderColor: color,
+                        showLine: false
+                    };
+                });
+
+                const c2 = new Chart(offCanvas2, {
+                    type: 'scatter',
+                    data: { datasets: tDatasets },
+                    options: {
+                        responsive: false,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        layout: {
+                            padding: { left: 10, right: 25, top: 12, bottom: 6 }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    usePointStyle: true,
+                                    boxWidth: 10,
+                                    font: { size: 12, weight: 'bold' },
+                                    padding: 14
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: mFinal,
+                                title: {
+                                    display: true,
+                                    text: "Minutos del Partido (0' a " + mFinal + "')",
+                                    font: { size: 13, weight: 'bold' },
+                                    color: '#1e293b'
+                                },
+                                ticks: {
+                                    stepSize: 5,
+                                    font: { size: 11, weight: '600' },
+                                    color: '#475569'
+                                },
+                                grid: { color: '#f1f5f9' }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1,
+                                    font: { size: 11, weight: '600' },
+                                    color: '#475569'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Nº Acciones Acumuladas',
+                                    font: { size: 13, weight: 'bold' },
+                                    color: '#1e293b'
+                                },
+                                grid: { color: '#f1f5f9' }
+                            }
+                        }
+                    }
+                });
+                chart2Img = offCanvas2.toDataURL('image/png');
+                c2.destroy();
+            } catch (e) {
+                console.warn("Error generando offscreen chart 2:", e);
+            }
+        }
+
+        if (!chart1Img && window.statsChartInstance) {
             try { chart1Img = window.statsChartInstance.toBase64Image(); } catch (e) { console.warn(e); }
         }
         if (!chart1Img) {
@@ -134,7 +301,7 @@ export function initPartidos() {
             if (c1 && c1.width > 0) { try { chart1Img = c1.toDataURL('image/png'); } catch (e) {} }
         }
 
-        if (window.temporalChartInstance) {
+        if (!chart2Img && window.temporalChartInstance) {
             try { chart2Img = window.temporalChartInstance.toBase64Image(); } catch (e) { console.warn(e); }
         }
         if (!chart2Img) {
@@ -162,10 +329,35 @@ export function initPartidos() {
             }).filter(p => p.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 3);
         };
 
-        const top3FaltasRec = renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3('faltasRecibidas'));
-        const top3FaltasCom = renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3('faltasCometidas'));
-        const top3TPuerta = renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3('tPuerta'));
-        const top3TFuera = renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'));
+        // Totales de faltas y tiros calculados de forma exhaustiva para mostrar entre paréntesis
+        let totalFRec = 0;
+        let totalFCom = 0;
+        let totalTPuerta = 0;
+        let totalTFuera = 0;
+
+        efemerides.forEach(ef => {
+            const eTipo = (ef.tipo || ef.accionId || '').toLowerCase();
+            const accNom = (ef.nombre || '').toLowerCase();
+            if (eTipo === 'falta-recibida' || accNom.includes('falta recibida')) totalFRec++;
+            if (eTipo === 'falta-cometida' || accNom.includes('falta cometida')) totalFCom++;
+            if ((eTipo === 'tiro-puerta' || accNom.includes('tiro a puerta') || eTipo.startsWith('gol-')) && !ef.rival && eTipo !== 'gol-rival') totalTPuerta++;
+            if ((eTipo === 'tiro-fuera' || accNom.includes('tiro fuera')) && !ef.rival) totalTFuera++;
+        });
+
+        const sumFRec = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.faltasRecibidas || 0), 0);
+        const sumFCom = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.faltasCometidas || 0), 0);
+        const sumTPuerta = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.tPuerta || 0), 0);
+        const sumTFuera = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.tFuera || 0), 0);
+
+        totalFRec = Math.max(totalFRec, sumFRec, resumen.totalFaltasRecibidas || 0);
+        totalFCom = Math.max(totalFCom, sumFCom, resumen.totalFaltasCometidas || 0);
+        totalTPuerta = Math.max(totalTPuerta, sumTPuerta, resumen.totalTirosPuerta || 0);
+        totalTFuera = Math.max(totalTFuera, sumTFuera, resumen.totalTirosFuera || 0);
+
+        const top3FaltasRec = renderTop3CardHTML(`Faltas Recibidas (${totalFRec})`, 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3('faltasRecibidas'));
+        const top3FaltasCom = renderTop3CardHTML(`Faltas Cometidas (${totalFCom})`, 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3('faltasCometidas'));
+        const top3TPuerta = renderTop3CardHTML(`Tiros a Puerta (${totalTPuerta})`, 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3('tPuerta'));
+        const top3TFuera = renderTop3CardHTML(`Tiros Fuera (${totalTFuera})`, 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'));
 
         // 3. Filas tabla de jugadores para Página 3
         const filasJugadoresHtml = validPlayerIds.map(id => {
@@ -233,13 +425,13 @@ export function initPartidos() {
                 }
 
                 return `
-                    <div class="pdf-avoid-break" style="break-inside: avoid; page-break-inside: avoid; display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 8px;">
-                        <div style="width: 64px; text-align: center; border-right: 1px solid #f1f5f9; padding-right: 8px; flex-shrink: 0;">
+                    <div class="pdf-avoid-break" style="break-inside: avoid; page-break-inside: avoid; display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 7px;">
+                        <div style="width: 60px; text-align: center; border-right: 1px solid #f1f5f9; padding-right: 6px; flex-shrink: 0;">
                             <span style="display: block; font-weight: 800; font-size: 13px; color: #0f172a;">${displayTiempo}</span>
                             <span style="display: block; font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 700;">${ef.periodo || '1ª Parte'}</span>
                         </div>
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #f8fafc; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                            <i class="fa-solid ${icon} ${cl}" style="font-size: 14px;"></i>
+                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #f8fafc; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i class="fa-solid ${icon} ${cl}" style="font-size: 13px;"></i>
                         </div>
                         <div style="flex: 1; min-width: 0;">
                             <div style="font-weight: 700; font-size: 13px; color: #1e293b;">${nom}</div>
@@ -256,47 +448,47 @@ export function initPartidos() {
 
         wrapper.innerHTML = `
             <!-- ======================= PÁGINA 1: RESUMEN Y LÍDERES ======================= -->
-            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
+            <div class="pdf-page" style="padding: 18px 22px; box-sizing: border-box;">
                 <!-- Header Info Partido -->
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         ${resumen.eqIzdaEscudo || ''}
-                        <span style="font-size: 18px; font-weight: 800; color: #1e293b;">${resumen.eqIzdaNombre || 'Mi Equipo'}</span>
+                        <span style="font-size: 17px; font-weight: 800; color: #1e293b;">${resumen.eqIzdaNombre || 'Mi Equipo'}</span>
                     </div>
                     <div style="display: flex; flex-direction: column; align-items: center;">
                         <span style="font-size: 11px; font-weight: 700; color: #64748b; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px 10px; border-radius: 9999px;">
                             ${resumen.fechaHora || ''}
                         </span>
-                        <span style="font-size: 24px; font-weight: 900; color: #0f172a; margin-top: 4px;">${resultadoTexto}</span>
+                        <span style="font-size: 22px; font-weight: 900; color: #0f172a; margin-top: 3px;">${resultadoTexto}</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px; text-align: right;">
-                        <span style="font-size: 18px; font-weight: 800; color: #1e293b;">${resumen.eqDchaNombre || 'Rival'}</span>
+                        <span style="font-size: 17px; font-weight: 800; color: #1e293b;">${resumen.eqDchaNombre || 'Rival'}</span>
                         ${resumen.eqDchaEscudo || ''}
                     </div>
                 </div>
 
                 <!-- Resumen Superior (3 tarjetas) -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px;">
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
                         <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Resultado Final</div>
-                        <div style="font-size: 26px; font-weight: 900; color: #1e293b; margin-top: 2px;">${resultadoTexto}</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #1e293b; margin-top: 2px;">${resultadoTexto}</div>
                     </div>
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
                         <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Acciones</div>
-                        <div style="font-size: 26px; font-weight: 900; color: #2563eb; margin-top: 2px;">${totAcc}</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #2563eb; margin-top: 2px;">${totAcc}</div>
                     </div>
-                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: center;">
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
                         <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">% Acciones Positivas</div>
-                        <div style="font-size: 26px; font-weight: 900; color: #8b5cf6; margin-top: 2px;">${pctPos}%</div>
+                        <div style="font-size: 24px; font-weight: 900; color: #8b5cf6; margin-top: 2px;">${pctPos}%</div>
                     </div>
                 </div>
 
-                <!-- Líderes del Partido (Top 3): Faltas arriba, Tiros abajo para que quepan bien los nombres -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px;">
-                    <h4 style="font-size: 14px; font-weight: 800; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 14px 0; display: flex; align-items: center; gap: 8px;">
+                <!-- Líderes del Partido (Top 3): Faltas arriba, Tiros abajo para que quepan bien los nombres y números totales -->
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;">
+                    <h4 style="font-size: 13px; font-weight: 800; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 12px 0; display: flex; align-items: center; gap: 8px;">
                         <i class="fa-solid fa-trophy" style="color: #f59e0b;"></i> Líderes del Partido (Top 3)
                     </h4>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;">
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
                         <div>${top3FaltasRec}</div>
                         <div>${top3FaltasCom}</div>
                         <div>${top3TPuerta}</div>
@@ -306,59 +498,57 @@ export function initPartidos() {
             </div>
 
             <!-- ======================= PÁGINA 2: GRÁFICOS (ANCHO COMPLETO) ======================= -->
-            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
-            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
-                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px;">
-                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <div class="pdf-page pdf-page-break-before" style="page-break-before: always; break-before: page; padding: 18px 22px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px;">
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
                         <i class="fa-solid fa-chart-pie" style="color: #2563eb;"></i> Análisis Gráfico del Partido
                     </h3>
                 </div>
 
                 <!-- Primera mitad: Distribución de Acciones ocupando todo el ancho -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 16px;">
-                    <h4 style="font-size: 13px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 12px;">
+                    <h4 style="font-size: 12px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-chart-column" style="color: #0284c7;"></i> Distribución de Acciones
                     </h4>
-                    <div style="width: 100%; height: 310px; display: flex; align-items: center; justify-content: center; background: #fafafa; border-radius: 8px;">
-                        ${chart1Img ? `<img src="${chart1Img}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Distribución">` : '<span style="color: #94a3b8; font-style: italic; font-size: 13px;">Sin datos registrados</span>'}
+                    <div style="width: 100%; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                        ${chart1Img ? `<img src="${chart1Img}" width="1400" height="420" style="width: 100%; height: 230px; display: block; object-fit: fill;" alt="Distribución">` : '<div style="padding: 30px; text-align: center; color: #94a3b8; font-style: italic;">Sin datos registrados</div>'}
                     </div>
                 </div>
 
                 <!-- Segunda mitad: Evolución de Acciones ocupando todo el ancho -->
-                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;">
-                    <h4 style="font-size: 13px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; margin: 0 0 10px 0; display: flex; align-items: center; gap: 6px;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px;">
+                    <h4 style="font-size: 12px; font-weight: 800; color: #334155; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin: 0 0 8px 0; display: flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-timeline" style="color: #6366f1;"></i> Evolución de Acciones en el Tiempo
                     </h4>
-                    <div style="width: 100%; height: 310px; display: flex; align-items: center; justify-content: center; background: #fafafa; border-radius: 8px;">
-                        ${chart2Img ? `<img src="${chart2Img}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Evolución">` : '<span style="color: #94a3b8; font-style: italic; font-size: 13px;">Sin datos registrados</span>'}
+                    <div style="width: 100%; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                        ${chart2Img ? `<img src="${chart2Img}" width="1400" height="460" style="width: 100%; height: 255px; display: block; object-fit: fill;" alt="Evolución">` : '<div style="padding: 30px; text-align: center; color: #94a3b8; font-style: italic;">Sin datos registrados</div>'}
                     </div>
                 </div>
             </div>
 
             <!-- ======================= PÁGINA 3: RENDIMIENTO POR JUGADOR (ANCHO COMPLETO) ======================= -->
-            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
-            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
-                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px;">
-                    <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <div class="pdf-page pdf-page-break-before" style="page-break-before: always; break-before: page; padding: 18px 22px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px;">
+                    <h3 style="font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
                         <i class="fa-solid fa-users" style="color: #2563eb;"></i> Rendimiento por Jugador
                     </h3>
-                    <p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">Desglose completo de acciones individuales de cada jugador en el partido.</p>
+                    <p style="font-size: 11px; color: #64748b; margin: 3px 0 0 0;">Desglose completo de acciones individuales de cada jugador en el partido.</p>
                 </div>
 
                 <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; width: 100%;">
                     <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
                         <thead style="background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">
                             <tr>
-                                <th style="padding: 10px 10px;">Jugador</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #2563eb;">Min</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #10b981;">Gol</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #f59e0b;">Asis</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #0284c7;">T.Puerta</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #64748b;">T.Fuera</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #2563eb;">F.Recib.</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #d97706;">F.Comet.</th>
-                                <th style="padding: 10px 6px; text-align: center; color: #e11d48;">Tarjetas</th>
-                                <th style="padding: 10px 8px; text-align: center; color: #6366f1;">Valoración</th>
+                                <th style="padding: 9px 10px;">Jugador</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #2563eb;">Min</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #10b981;">Gol</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #f59e0b;">Asis</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #0284c7;">T.Puerta</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #64748b;">T.Fuera</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #2563eb;">F.Recib.</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #d97706;">F.Comet.</th>
+                                <th style="padding: 9px 6px; text-align: center; color: #e11d48;">Tarjetas</th>
+                                <th style="padding: 9px 8px; text-align: center; color: #6366f1;">Valoración</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -369,14 +559,13 @@ export function initPartidos() {
             </div>
 
             <!-- ======================= PÁGINA 4+: TIMELINE COMPLETO ======================= -->
-            <div class="html2pdf__page-break" style="page-break-before: always; break-before: page;"></div>
-            <div class="pdf-page" style="padding: 24px; box-sizing: border-box;">
-                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between;">
+            <div class="pdf-page pdf-page-break-before" style="page-break-before: always; break-before: page; padding: 18px 22px; box-sizing: border-box;">
+                <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
                     <div>
-                        <h3 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
+                        <h3 style="font-size: 15px; font-weight: 800; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 8px;">
                             <i class="fa-solid fa-clock-rotate-left" style="color: #2563eb;"></i> Timeline del Partido (Cronología Completa)
                         </h3>
-                        <p style="font-size: 11px; color: #64748b; margin: 4px 0 0 0;">Todas las acciones registradas en orden cronológico detallado.</p>
+                        <p style="font-size: 11px; color: #64748b; margin: 3px 0 0 0;">Todas las acciones registradas en orden cronológico detallado.</p>
                     </div>
                     <span style="font-size: 11px; font-weight: 800; background: #f1f5f9; color: #334155; padding: 4px 10px; border-radius: 9999px;">
                         ${sortedEfems.length} acciones
@@ -425,6 +614,21 @@ export function initPartidos() {
 
             const printWrapper = buildPdfExportElement();
 
+            // Esperar a que todas las imágenes en printWrapper estén completamente decodificadas antes del layout de html2pdf
+            const imgs = Array.from(printWrapper.querySelectorAll('img'));
+            await Promise.all(imgs.map(img => {
+                if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+                return new Promise(res => {
+                    img.onload = res;
+                    img.onerror = res;
+                    if (img.decode) {
+                        img.decode().then(res).catch(res);
+                    } else {
+                        setTimeout(res, 80);
+                    }
+                });
+            }));
+
             const opt = {
                 margin:       [8, 8, 8, 8],
                 filename:     filename,
@@ -439,7 +643,7 @@ export function initPartidos() {
                     logging: false
                 },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak:    { mode: ['css', 'legacy'], before: '.html2pdf__page-break', avoid: '.pdf-avoid-break' }
+                pagebreak:    { mode: ['css', 'legacy'], before: '.pdf-page-break-before', avoid: '.pdf-avoid-break' }
             };
 
             let pdfBlob = null;
@@ -1148,36 +1352,6 @@ async function abrirEstadisticas(par) {
     let colorByAcc = {};
     let iconByAcc = {};
     
-    // Helper to draw FA icon on canvas
-    const getIconCanvas = (iconClass, color) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 24;
-        canvas.height = 24;
-        const ctx = canvas.getContext('2d');
-        
-        const el = document.createElement('i');
-        el.className = `fa-solid ${iconClass}`;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-        let unicode = window.getComputedStyle(el, '::before').getPropertyValue('content');
-        document.body.removeChild(el);
-        
-        if (unicode && unicode !== 'none') {
-            unicode = unicode.replace(/['"]/g, '');
-            ctx.font = '900 16px "Font Awesome 6 Free"';
-            ctx.fillStyle = color;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(unicode, 12, 12);
-        } else {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(12, 12, 6, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        return canvas;
-    };
-    
     const twColors = {
       emerald: '#10b981', blue: '#3b82f6', amber: '#f59e0b', rose: '#f43f5e', 
       slate: '#64748b', purple: '#a855f7', indigo: '#6366f1', red: '#ef4444'
@@ -1339,6 +1513,47 @@ async function abrirEstadisticas(par) {
 
     const validPlayerIds = Object.keys(statsJugadores).filter(id => id && id !== 'undefined' && id !== 'null');
 
+    // Totales de tiros y faltas para el partido
+    let totalFaltasRecibidas = 0;
+    let totalFaltasCometidas = 0;
+    let totalTirosPuerta = 0;
+    let totalTirosFuera = 0;
+
+    efemerides.forEach(ef => {
+        const eTipo = ef.tipo || ef.accionId || '';
+        const eTipoStr = (eTipo || '').toLowerCase();
+        const accNomStr = (ef.nombre || '').toLowerCase();
+
+        if (eTipoStr === 'falta-recibida' || accNomStr.includes('falta recibida')) totalFaltasRecibidas++;
+        if (eTipoStr === 'falta-cometida' || accNomStr.includes('falta cometida')) totalFaltasCometidas++;
+        if ((eTipoStr === 'tiro-puerta' || accNomStr.includes('tiro a puerta') || eTipoStr.startsWith('gol-')) && !ef.rival && eTipo !== 'gol-rival') totalTirosPuerta++;
+        if ((eTipoStr === 'tiro-fuera' || accNomStr.includes('tiro fuera')) && !ef.rival) totalTirosFuera++;
+    });
+
+    const sumFRec = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.faltasRecibidas || 0), 0);
+    const sumFCom = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.faltasCometidas || 0), 0);
+    const sumTPuerta = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.tPuerta || 0), 0);
+    const sumTFuera = validPlayerIds.reduce((sum, id) => sum + (statsJugadores[id]?.tFuera || 0), 0);
+
+    totalFaltasRecibidas = Math.max(totalFaltasRecibidas, sumFRec);
+    totalFaltasCometidas = Math.max(totalFaltasCometidas, sumFCom);
+    totalTirosPuerta = Math.max(totalTirosPuerta, sumTPuerta);
+    totalTirosFuera = Math.max(totalTirosFuera, sumTFuera);
+
+    currentStatsResumen.totalFaltasRecibidas = totalFaltasRecibidas;
+    currentStatsResumen.totalFaltasCometidas = totalFaltasCometidas;
+    currentStatsResumen.totalTirosPuerta = totalTirosPuerta;
+    currentStatsResumen.totalTirosFuera = totalTirosFuera;
+
+    currentStatsChartPayload = {
+        distribucionLabels: Object.keys(distribucion),
+        distribucionData: Object.values(distribucion),
+        temporalData,
+        colorByAcc,
+        iconByAcc,
+        minFinal
+    };
+
     const getTop3Partido = (metricKey) => {
         return validPlayerIds.map(id => {
             const jug = todosLosJugadores.find(j => j.id === id);
@@ -1359,10 +1574,10 @@ async function abrirEstadisticas(par) {
     const containerTop3Stats = document.getElementById('stats-top3-container');
     if (containerTop3Stats) {
         containerTop3Stats.innerHTML = [
-            renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3Partido('faltasRecibidas')),
-            renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3Partido('faltasCometidas')),
-            renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3Partido('tPuerta')),
-            renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3Partido('tFuera'))
+            renderTop3CardHTML(`Faltas Recibidas (${totalFaltasRecibidas})`, 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3Partido('faltasRecibidas')),
+            renderTop3CardHTML(`Faltas Cometidas (${totalFaltasCometidas})`, 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3Partido('faltasCometidas')),
+            renderTop3CardHTML(`Tiros a Puerta (${totalTirosPuerta})`, 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3Partido('tPuerta')),
+            renderTop3CardHTML(`Tiros Fuera (${totalTirosFuera})`, 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3Partido('tFuera'))
         ].join('');
     }
     
