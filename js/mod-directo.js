@@ -622,6 +622,7 @@ function updateCronoUI() {
     const miEquipo = todosLosEquipos.find(eq => eq.id === partidoObj.equipoId)?.nombre || 'Mi Equipo';
     const matchTitle = isLocal ? `${miEquipo} vs ${rivalName}` : `${rivalName} vs ${miEquipo}`;
     document.getElementById('directo-titulo-partido').innerText = `${matchTitle} - Directo`;
+    updateMarcadorDirecto();
 }
 
 
@@ -1169,10 +1170,47 @@ function updateMarcadorDirecto() {
             }
         }
     });
-    const lblMio = document.getElementById('directo-marcador-mio');
-    const lblRival = document.getElementById('directo-marcador-rival');
-    if (lblMio) lblMio.innerText = golesMios;
-    if (lblRival) lblRival.innerText = golesRival;
+
+    const lblIzq = document.getElementById('directo-marcador-izq') || document.getElementById('directo-marcador-mio');
+    const lblDer = document.getElementById('directo-marcador-der') || document.getElementById('directo-marcador-rival');
+    const lblIzqNom = document.getElementById('directo-marcador-izq-nom');
+    const lblDerNom = document.getElementById('directo-marcador-der-nom');
+
+    const isLocal = !partidoObj || partidoObj.esLocal !== false;
+    const rivalName = partidoObj?.rival || 'Rival';
+    const miEquipo = todosLosEquipos.find(eq => eq.id === partidoObj?.equipoId)?.nombre || 'Mi Equipo';
+
+    if (isLocal) {
+        // Mi equipo juega en CASA / LOCAL (Izquierda), Rival es VISITANTE (Derecha)
+        if (lblIzq) {
+            lblIzq.innerText = golesMios;
+            lblIzq.className = 'text-xl sm:text-2xl font-bold text-emerald-400 leading-tight';
+            lblIzq.title = `${miEquipo} (Local)`;
+        }
+        if (lblIzqNom) lblIzqNom.innerText = miEquipo;
+
+        if (lblDer) {
+            lblDer.innerText = golesRival;
+            lblDer.className = 'text-xl sm:text-2xl font-bold text-rose-400 leading-tight';
+            lblDer.title = `${rivalName} (Visitante)`;
+        }
+        if (lblDerNom) lblDerNom.innerText = rivalName;
+    } else {
+        // Mi equipo juega FUERA / VISITANTE (Derecha), Rival es LOCAL (Izquierda)
+        if (lblIzq) {
+            lblIzq.innerText = golesRival;
+            lblIzq.className = 'text-xl sm:text-2xl font-bold text-rose-400 leading-tight';
+            lblIzq.title = `${rivalName} (Local)`;
+        }
+        if (lblIzqNom) lblIzqNom.innerText = rivalName;
+
+        if (lblDer) {
+            lblDer.innerText = golesMios;
+            lblDer.className = 'text-xl sm:text-2xl font-bold text-emerald-400 leading-tight';
+            lblDer.title = `${miEquipo} (Visitante)`;
+        }
+        if (lblDerNom) lblDerNom.innerText = miEquipo;
+    }
     
     if (partidoObj && partidoIdActivo) {
         let resultadoStr;
