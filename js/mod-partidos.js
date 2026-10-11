@@ -116,7 +116,8 @@ export function initPartidos() {
 
         const wrapper = document.createElement('div');
         wrapper.id = 'pdf-export-wrapper';
-        wrapper.style.width = '794px';
+        wrapper.style.width = '100%';
+        wrapper.style.maxWidth = '100%';
         wrapper.style.backgroundColor = '#ffffff';
         wrapper.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         wrapper.style.color = '#1e293b';
@@ -141,14 +142,21 @@ export function initPartidos() {
             if (c2 && c2.width > 0) { try { chart2Img = c2.toDataURL('image/png'); } catch (e) {} }
         }
 
+        const validPlayerIds = Object.keys(statsJugadores).filter(id => id && id !== 'undefined' && id !== 'null');
+
         // 2. Top 3 para Página 1
         const getTop3 = (metricKey) => {
-            return Object.keys(statsJugadores).map(id => {
+            return validPlayerIds.map(id => {
                 const jug = todosLosJugadores.find(j => j.id === id);
+                const efJug = efemerides.find(e => e.jugadorId === id);
+                let jugNombre = jug?.nombre || efJug?.jugadorNombre || statsJugadores[id]?.nombre || '';
+                if (!jugNombre || jugNombre === 'undefined') jugNombre = 'Jugador';
+                let jugDorsal = (jug?.dorsal !== undefined && jug?.dorsal !== null) ? jug.dorsal : (efJug?.jugadorDorsal ?? (statsJugadores[id]?.dorsal ?? ''));
+                if (jugDorsal === 'undefined') jugDorsal = '';
                 return {
                     id,
-                    nombre: jug ? jug.nombre : 'Desconocido',
-                    dorsal: jug?.dorsal || '',
+                    nombre: jugNombre,
+                    dorsal: jugDorsal,
                     valor: statsJugadores[id][metricKey] || 0
                 };
             }).filter(p => p.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 3);
@@ -160,9 +168,13 @@ export function initPartidos() {
         const top3TFuera = renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'));
 
         // 3. Filas tabla de jugadores para Página 3
-        const filasJugadoresHtml = Object.keys(statsJugadores).map(id => {
+        const filasJugadoresHtml = validPlayerIds.map(id => {
             const jug = todosLosJugadores.find(j => j.id === id);
-            if (!jug) return '';
+            const efJug = efemerides.find(e => e.jugadorId === id);
+            let jugNombre = jug?.nombre || efJug?.jugadorNombre || statsJugadores[id]?.nombre || '';
+            if (!jugNombre || jugNombre === 'undefined') jugNombre = 'Jugador';
+            let jugDorsal = (jug?.dorsal !== undefined && jug?.dorsal !== null) ? jug.dorsal : (efJug?.jugadorDorsal ?? (statsJugadores[id]?.dorsal ?? '-'));
+            if (jugDorsal === 'undefined') jugDorsal = '-';
             const st = statsJugadores[id] || {};
             const mins = st.mins || 0;
             const goles = st.goles || 0;
@@ -173,14 +185,14 @@ export function initPartidos() {
             const fCom = st.faltasCometidas || 0;
             const amarillas = st.amarillas || 0;
             const rojas = st.rojas || 0;
-            const scoreVal = st.scoreValor || 0;
+            const scoreVal = (typeof st.scoreValor === 'number' && !isNaN(st.scoreValor)) ? st.scoreValor : 0;
             const val = Number(scoreVal % 1 === 0 ? scoreVal : scoreVal.toFixed(2));
             const valColor = val > 0 ? '#10b981' : (val < 0 ? '#ef4444' : '#94a3b8');
             const valSign = val > 0 ? '+' : '';
             return `
                 <tr style="border-bottom: 1px solid #f1f5f9;">
                     <td style="padding: 8px 10px; font-weight: 600; color: #1e293b;">
-                        #${jug.dorsal || '-'} ${jug.nombre || 'Jugador'}
+                        #${jugDorsal} ${jugNombre}
                     </td>
                     <td style="padding: 8px 6px; text-align: center; color: #475569; font-weight: 600;">${mins}'</td>
                     <td style="padding: 8px 6px; text-align: center; color: #10b981; font-weight: 700;">${goles}</td>
@@ -395,7 +407,6 @@ export function initPartidos() {
 
         mostrarNotificacion("Generando PDF estructurado del partido...", false);
 
-        let printWrapper = null;
         try {
             // Asegurar disponibilidad de html2pdf
             if (typeof window.html2pdf === 'undefined') {
@@ -412,12 +423,7 @@ export function initPartidos() {
             const fechaSlug = currentStatsPartido?.fecha || new Date().toISOString().split('T')[0];
             const filename = `estadisticas-${rivalSlug}-${fechaSlug}.pdf`;
 
-            printWrapper = buildPdfExportElement();
-            printWrapper.style.position = 'fixed';
-            printWrapper.style.left = '-9999px';
-            printWrapper.style.top = '0';
-            printWrapper.style.zIndex = '-9999';
-            document.body.appendChild(printWrapper);
+            const printWrapper = buildPdfExportElement();
 
             const opt = {
                 margin:       [8, 8, 8, 8],
@@ -426,10 +432,11 @@ export function initPartidos() {
                 html2canvas:  {
                     scale: 2,
                     useCORS: true,
-                    allowTaint: true,
-                    logging: false,
-                    width: 794,
-                    windowWidth: 794
+                    allowTaint: false,
+                    letterRendering: true,
+                    scrollX: 0,
+                    scrollY: 0,
+                    logging: false
                 },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
                 pagebreak:    { mode: ['css', 'legacy'], before: '.html2pdf__page-break', avoid: '.pdf-avoid-break' }
@@ -486,9 +493,6 @@ export function initPartidos() {
             console.error("Error al exportar PDF:", err);
             mostrarNotificacion("Error al generar PDF: " + (err.message || "desconocido"), true);
         } finally {
-            if (printWrapper && printWrapper.parentNode) {
-                printWrapper.remove();
-            }
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = originalBtnHtml;
@@ -1133,7 +1137,7 @@ async function abrirEstadisticas(par) {
     
     let statsJugadores = {};
     
-    const titulares = par.titulares || [];
+    const titulares = (par.titulares || []).filter(id => id && id !== 'undefined' && id !== 'null');
     titulares.forEach(id => {
         statsJugadores[id] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: 0, salida: null };
     });
@@ -1225,8 +1229,12 @@ async function abrirEstadisticas(par) {
                 }
             }
         }
-        if (ef.jugadorId && !statsJugadores[ef.jugadorId]) {
-            statsJugadores[ef.jugadorId] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: null, salida: null };
+        if (ef.jugadorId && ef.jugadorId !== 'undefined' && ef.jugadorId !== 'null') {
+            if (!statsJugadores[ef.jugadorId]) {
+                statsJugadores[ef.jugadorId] = { mins: 0, goles: 0, asis: 0, tPuerta: 0, tFuera: 0, faltasRecibidas: 0, faltasCometidas: 0, amarillas: 0, rojas: 0, pos: 0, neg: 0, scoreValor: 0, entrada: null, salida: null };
+            }
+            if (ef.jugadorNombre && ef.jugadorNombre !== 'undefined') statsJugadores[ef.jugadorId].nombre = ef.jugadorNombre;
+            if (ef.jugadorDorsal !== undefined && ef.jugadorDorsal !== null && ef.jugadorDorsal !== 'undefined') statsJugadores[ef.jugadorId].dorsal = ef.jugadorDorsal;
         }
 
         const eTipoStr = (eTipo || '').toLowerCase();
@@ -1329,13 +1337,20 @@ async function abrirEstadisticas(par) {
         </div>
     `;
 
+    const validPlayerIds = Object.keys(statsJugadores).filter(id => id && id !== 'undefined' && id !== 'null');
+
     const getTop3Partido = (metricKey) => {
-        return Object.keys(statsJugadores).map(id => {
+        return validPlayerIds.map(id => {
             const jug = todosLosJugadores.find(j => j.id === id);
+            const efJug = efemerides.find(e => e.jugadorId === id);
+            let jugNombre = jug?.nombre || efJug?.jugadorNombre || statsJugadores[id]?.nombre || '';
+            if (!jugNombre || jugNombre === 'undefined') jugNombre = 'Jugador';
+            let jugDorsal = (jug?.dorsal !== undefined && jug?.dorsal !== null) ? jug.dorsal : (efJug?.jugadorDorsal ?? (statsJugadores[id]?.dorsal ?? ''));
+            if (jugDorsal === 'undefined') jugDorsal = '';
             return {
                 id,
-                nombre: jug ? jug.nombre : 'Desconocido',
-                dorsal: jug?.dorsal || '',
+                nombre: jugNombre,
+                dorsal: jugDorsal,
                 valor: statsJugadores[id][metricKey] || 0
             };
         }).filter(p => p.valor > 0).sort((a,b) => b.valor - a.valor).slice(0, 3);
@@ -1351,9 +1366,13 @@ async function abrirEstadisticas(par) {
         ].join('');
     }
     
-    const jugListHTML = Object.keys(statsJugadores).map(id => {
+    const jugListHTML = validPlayerIds.map(id => {
         const jug = todosLosJugadores.find(j => j.id === id);
-        if (!jug) return '';
+        const efJug = efemerides.find(e => e.jugadorId === id);
+        let jugNombre = jug?.nombre || efJug?.jugadorNombre || statsJugadores[id]?.nombre || '';
+        if (!jugNombre || jugNombre === 'undefined') jugNombre = 'Jugador';
+        let jugDorsal = (jug?.dorsal !== undefined && jug?.dorsal !== null) ? jug.dorsal : (efJug?.jugadorDorsal ?? (statsJugadores[id]?.dorsal ?? '-'));
+        if (jugDorsal === 'undefined') jugDorsal = '-';
         const st = statsJugadores[id] || {};
         const mins = st.mins || 0;
         const goles = st.goles || 0;
@@ -1364,12 +1383,12 @@ async function abrirEstadisticas(par) {
         const fCom = st.faltasCometidas || 0;
         const amarillas = st.amarillas || 0;
         const rojas = st.rojas || 0;
-        const scoreVal = st.scoreValor || 0;
+        const scoreVal = (typeof st.scoreValor === 'number' && !isNaN(st.scoreValor)) ? st.scoreValor : 0;
         const val = Number(scoreVal % 1 === 0 ? scoreVal : scoreVal.toFixed(2));
         let pColor = val > 0 ? 'text-emerald-500 font-bold' : (val < 0 ? 'text-red-500 font-bold' : 'text-slate-400');
         return `
             <tr class="hover:bg-slate-50 border-b border-slate-50 last:border-0 md:table-row">
-                <td class="px-3 py-2 font-medium">#${jug.dorsal || '-'} ${jug.nombre || 'Jugador'}</td>
+                <td class="px-3 py-2 font-medium">#${jugDorsal} ${jugNombre}</td>
                 <td class="px-2 py-2 text-center text-slate-600 font-bold">${mins}'</td>
                 <td class="px-2 py-2 text-center text-emerald-600 font-bold">${goles}</td>
                 <td class="px-2 py-2 text-center text-amber-600 font-bold">${asis}</td>
