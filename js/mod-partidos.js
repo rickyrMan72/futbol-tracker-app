@@ -2,7 +2,7 @@ import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc,
 import { mostrarNotificacion, bindModal, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesAsc, compararEfemeridesDesc, formatearTiempoAnotado, renderTop3CardHTML } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
-import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL } from './mod-directo.js';
+import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL, calcularJugadoresEnCampo } from './mod-directo.js';
 import { getGlobalAcciones } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
@@ -741,13 +741,15 @@ export function initPartidos() {
     const closeModPartido = bindModal('modal-partido', 'btn-open-modal-partido', 'btn-close-modal-partido', 'btn-cancel-modal-partido', () => {
         document.getElementById('form-partido').reset();
         delete document.getElementById('form-partido').dataset.editId;
+        partidoEnEdicion = null;
         prepPartido();
     });
     
     document.getElementById('btn-open-modal-partido').addEventListener('click', prepPartido);
     
     document.getElementById('btn-save-modal-partido').addEventListener('click', async () => {
-        if (!equipoIdActivo) {
+        const eqIdDestino = (partidoEnEdicion && partidoEnEdicion.equipoId) || equipoIdActivo;
+        if (!eqIdDestino) {
             alert("Selecciona un equipo primero.");
             return;
         }
@@ -765,7 +767,7 @@ export function initPartidos() {
             comentarios: document.getElementById('input-partido-comentarios').value,
             convocados: convocados,
             titulares: titulares,
-            equipoId: equipoIdActivo
+            equipoId: eqIdDestino
         };
 
         if (!data.rival || !data.fecha || !data.hora) return alert("Faltan campos obligatorios");
@@ -773,40 +775,35 @@ export function initPartidos() {
         try { 
             const editId = document.getElementById('form-partido').dataset.editId;
             if (editId) {
-                const existingPartido = todosLosPartidos.find(p => p.id === editId) || {};
-                const oldTitulares = existingPartido.titulares || [];
-                const oldEnCampo = existingPartido.enCampo || oldTitulares;
+                const existingPartido = (partidoEnEdicion && partidoEnEdicion.id === editId ? partidoEnEdicion : null) || 
+                                       todosLosPartidos.find(p => p.id === editId) || {};
                 
-                // Jugadores que se acaban de marcar como titulares
-                const addedTitulares = titulares.filter(id => !oldTitulares.includes(id));
-                // Jugadores que se han desmarcado de titulares
-                const removedTitulares = oldTitulares.filter(id => !titulares.includes(id));
-                
-                let updatedEnCampo = [...oldEnCampo];
-                // Añadir los nuevos titulares al campo (si no estaban ya)
-                addedTitulares.forEach(id => {
-                    if (!updatedEnCampo.includes(id)) {
-                        updatedEnCampo.push(id);
-                    }
-                });
-                // Quitar a los que se han desmarcado como titulares
-                updatedEnCampo = updatedEnCampo.filter(id => !removedTitulares.includes(id));
-                // Asegurar que solo sigan en el campo los que están convocados
-                updatedEnCampo = updatedEnCampo.filter(id => convocados.includes(id));
-                
-                const hasStarted = existingPartido && existingPartido.cronometro && 
-                                   (existingPartido.cronometro.tiempoAcumulado > 0 || existingPartido.cronometro.estado !== 'pausado');
-                if (!hasStarted || updatedEnCampo.length === 0) {
-                    updatedEnCampo = [...titulares];
+                // Cargar efemérides existentes del partido para mantener las sustituciones exactas
+                let efemerides = [];
+                try {
+                    const efSnap = await getDocs(collection(db, 'partidos', editId, 'efemerides'));
+                    efSnap.forEach(d => efemerides.push({ id: d.id, ...d.data() }));
+                } catch(err) {
+                    console.warn("No se pudieron cargar efemérides:", err);
                 }
 
-                data.enCampo = updatedEnCampo;
+                const partidoParaCalculo = {
+                    ...existingPartido,
+                    ...data,
+                    titulares,
+                    convocados
+                };
+
+                data.enCampo = calcularJugadoresEnCampo(partidoParaCalculo, efemerides);
+                data.equipoId = existingPartido.equipoId || eqIdDestino;
 
                 await updateDoc(doc(db, 'partidos', editId), data);
                 mostrarNotificacion("Partido y alineación actualizados"); 
             } else {
-                // Initialize match state
-                data.enCampo = titulares;
+                // Initialize match state (Fútbol 11 max 11, Fútbol 7 max 7)
+                const equipo = todosLosEquipos.find(eq => eq.id === data.equipoId);
+                const maxJug = ((equipo && equipo.modalidad === 'Fútbol 7') || data.modalidad === 'Fútbol 7') ? 7 : 11;
+                data.enCampo = titulares.slice(0, maxJug);
                 data.cronometro = {
                     estado: 'pausado',
                     ultimoInicioTimer: 0,
@@ -825,15 +822,24 @@ export function initPartidos() {
 
 function añadirEventosCheckboxes() {
     // Si se desmarca convocado, se desmarca titular
-    // Titular solo habilitado si convocado está marcado
-    const convChecks = document.querySelectorAll('.chk-convocado');
-    convChecks.forEach(chk => {
-        chk.addEventListener('change', (e) => {
-            const row = e.target.closest('label');
-            const titChk = row.querySelector('.chk-titular');
+    // Si se marca titular, se marca y habilita automáticamente convocado
+    const rows = document.querySelectorAll('#partido-jugadores-list label');
+    rows.forEach(row => {
+        const convChk = row.querySelector('.chk-convocado');
+        const titChk = row.querySelector('.chk-titular');
+        if (!convChk || !titChk) return;
+
+        convChk.addEventListener('change', (e) => {
             titChk.disabled = !e.target.checked;
             if (!e.target.checked) {
                 titChk.checked = false;
+            }
+        });
+
+        titChk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                convChk.checked = true;
+                titChk.disabled = false;
             }
         });
     });
@@ -906,7 +912,10 @@ function bindPartidoEvents(el, par, isFinalizadoMatch) {
     });
 }
 
+let partidoEnEdicion = null;
+
 export function abrirEdicionPartido(par) {
+    partidoEnEdicion = par;
     if (!par) return;
     document.getElementById('input-partido-rival').value = par.rival || '';
     document.getElementById('input-partido-local').checked = par.esLocal !== false;

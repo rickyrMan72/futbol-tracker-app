@@ -8,6 +8,7 @@ import { todosLosPartidos, abrirEdicionPartido, abrirModalAccionPartido, recalcu
 let partidoIdActivo = null;
 let partidoObj = null;
 let efemeridesList = [];
+let efemeridesCargadas = false;
 let unsubPartido = null;
 let unsubEfemerides = null;
 let cronoInterval = null;
@@ -282,45 +283,87 @@ export function initDirecto() {
 }
 
 
-function sincronizarTitularesEnCampo() {
-    if (!partidoObj) return;
-    const titulares = partidoObj.titulares || [];
-    const convocados = partidoObj.convocados || [];
+export function calcularJugadoresEnCampo(partido, efemerides = []) {
+    if (!partido) return [];
+    const titulares = (partido.titulares || []).filter(Boolean);
+    const convocados = (partido.convocados || []).filter(Boolean);
     
-    if (!partidoObj.enCampo || partidoObj.enCampo.length === 0) {
-        partidoObj.enCampo = [...titulares];
-    } else {
-        // IDs que han salido del campo por sustitución
-        const idsSustituidos = (efemeridesList || [])
-            .filter(ef => (ef.tipo === 'sustitucion' || ef.tipo === 'sustitucion-lesion' || ef.tipo === 'cambio') && (ef.jugadorId || ef.jugadorSaleId))
-            .map(ef => ef.jugadorId || ef.jugadorSaleId);
+    // Modalidad del equipo: Fútbol 7 (máx 7) o Fútbol 11 (máx 11)
+    const equipo = todosLosEquipos.find(eq => eq.id === partido.equipoId);
+    const esF7 = (equipo && equipo.modalidad === 'Fútbol 7') || partido.modalidad === 'Fútbol 7';
+    const maxJugadores = esF7 ? 7 : 11;
 
-        let huboCambios = false;
-        // Si hay titulares marcados que no están en el campo y no han sido sustituidos, añadirlos
-        titulares.forEach(titId => {
-            if (!idsSustituidos.includes(titId) && !partidoObj.enCampo.includes(titId)) {
-                if (convocados.length === 0 || convocados.includes(titId)) {
-                    partidoObj.enCampo.push(titId);
-                    huboCambios = true;
-                }
-            }
+    // Empezamos con los titulares que estén convocados (o todos los titulares si la convocatoria no tiene filtros)
+    let enCampo = titulares.filter(id => convocados.length === 0 || convocados.includes(id));
+
+    // Si hay efemérides de sustitución, aplicarlas en orden cronológico ascendente (las más antiguas primero)
+    const sustituciones = (efemerides || [])
+        .filter(ef => {
+            const t = ef.tipo || ef.accionId;
+            return (t === 'sustitucion' || t === 'sustitucion-lesion' || t === 'cambio');
+        })
+        .sort((a, b) => {
+            const tA = (a.minutoMs !== undefined) ? a.minutoMs : (a.timestamp || 0);
+            const tB = (b.minutoMs !== undefined) ? b.minutoMs : (b.timestamp || 0);
+            return tA - tB;
         });
 
-        // Asegurar que si alguien fue desmarcado de la convocatoria no siga en el campo
-        if (convocados.length > 0) {
-            const antes = partidoObj.enCampo.length;
-            partidoObj.enCampo = partidoObj.enCampo.filter(id => convocados.includes(id));
-            if (partidoObj.enCampo.length !== antes) huboCambios = true;
+    sustituciones.forEach(sub => {
+        const saleId = sub.jugadorId || sub.jugadorSaleId;
+        const entraId = sub.jugadorEntraId;
+        
+        // Quitar al que sale si está en el campo
+        if (saleId) {
+            enCampo = enCampo.filter(id => id !== saleId);
         }
+        // Meter al que entra si está convocado y no está ya en el campo
+        if (entraId && (convocados.length === 0 || convocados.includes(entraId))) {
+            if (!enCampo.includes(entraId)) {
+                enCampo.push(entraId);
+            }
+        }
+    });
 
-        if (huboCambios && partidoIdActivo) {
-            updateDoc(doc(db, 'partidos', partidoIdActivo), { enCampo: partidoObj.enCampo }).catch(e => console.error('Error al sincronizar titulares:', e));
+    // Asegurar que si hay convocatoria definida, nadie desconvocado permanezca en el campo
+    if (convocados.length > 0) {
+        enCampo = enCampo.filter(id => convocados.includes(id));
+    }
+
+    // Limitar al número máximo de jugadores según la modalidad (11 en F11, 7 en F7)
+    if (enCampo.length > maxJugadores) {
+        enCampo = enCampo.slice(0, maxJugadores);
+    }
+
+    return enCampo;
+}
+
+function sincronizarTitularesEnCampo() {
+    if (!partidoObj) return;
+    
+    // Si aún no han cargado las efemérides y el partido ya tiene jugadores en campo guardados,
+    // esperamos a que carguen las efemérides para evitar sobreescribir sustituciones existentes
+    if (!efemeridesCargadas && Array.isArray(partidoObj.enCampo) && partidoObj.enCampo.length > 0) {
+        return;
+    }
+
+    const calculados = calcularJugadoresEnCampo(partidoObj, efemeridesList);
+    const actuales = partidoObj.enCampo || [];
+    const sonIguales = actuales.length === calculados.length && 
+                       actuales.every((id, idx) => id === calculados[idx]);
+
+    if (!sonIguales) {
+        partidoObj.enCampo = calculados;
+        if (partidoIdActivo) {
+            updateDoc(doc(db, 'partidos', partidoIdActivo), { enCampo: calculados })
+                .catch(e => console.error('Error al sincronizar titulares en campo:', e));
         }
     }
 }
 
 function abrirDirecto(id) {
     partidoIdActivo = id;
+    efemeridesList = [];
+    efemeridesCargadas = false;
     
     // Switch Views
     document.querySelectorAll('.app-view').forEach(v => v.classList.add('hidden'));
@@ -374,6 +417,7 @@ function abrirDirecto(id) {
             efemeridesList = [];
             snapshot.forEach(docSnap => efemeridesList.push({ id: docSnap.id, ...docSnap.data() }));
             efemeridesList.sort(compararEfemeridesDesc); // Mas recientes en el partido primero
+            efemeridesCargadas = true;
             renderEfemerides();
             sincronizarTitularesEnCampo();
             renderJugadoresEnCampo();
@@ -388,6 +432,8 @@ function abrirDirecto(id) {
 
 function cerrarDirecto() {
     partidoIdActivo = null;
+    efemeridesList = [];
+    efemeridesCargadas = false;
     if (unsubPartido) unsubPartido();
     if (unsubEfemerides) unsubEfemerides();
     if (cronoInterval) clearInterval(cronoInterval);
@@ -1215,6 +1261,14 @@ async function ejecutarCambio() {
         if (jEntraId && !nuevosEnCampo.includes(jEntraId)) {
             nuevosEnCampo.push(jEntraId);
         }
+
+        const eqModalidad = todosLosEquipos.find(eq => eq.id === partidoObj.equipoId)?.modalidad;
+        const maxJug = (eqModalidad === 'Fútbol 7' || partidoObj.modalidad === 'Fútbol 7') ? 7 : 11;
+        if (nuevosEnCampo.length > maxJug) {
+            nuevosEnCampo = nuevosEnCampo.slice(0, maxJug);
+        }
+
+        partidoObj.enCampo = nuevosEnCampo;
 
         await updateDoc(doc(db, 'partidos', partidoIdActivo), {
             enCampo: nuevosEnCampo
