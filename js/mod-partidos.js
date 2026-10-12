@@ -859,6 +859,12 @@ export function renderizarPartidos() {
         contenedor.classList.add('hidden');
         if (msgNoEquipo) msgNoEquipo.classList.remove('hidden');
         if (btnAddPartido) btnAddPartido.disabled = true;
+        const elProxPartido = document.getElementById('dash-proximo-partido');
+        const elProxPartidoSub = document.getElementById('dash-proximo-partido-sub');
+        if (elProxPartido) elProxPartido.innerText = "Sin programar";
+        if (elProxPartidoSub) elProxPartidoSub.innerText = "Selecciona un equipo";
+        const badgePartidos = document.getElementById('dash-partidos-count-badge');
+        if (badgePartidos) badgePartidos.innerText = "0 partidos jugados";
         return;
     }
     
@@ -2238,9 +2244,51 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
     const containerTop3 = document.getElementById('dash-top3-container');
     const containerTarjetas = document.getElementById('dash-tarjetas-container');
 
-    const numPartidosTotal = partidos ? partidos.length : 0;
+    const ahoraMs = ahora.getTime();
+    const hoyStr = ahora.toISOString().split('T')[0];
+
+    // 1. Actualizar ficha de PRÓXIMO PARTIDO en el Dashboard
+    const elProxPartido = document.getElementById('dash-proximo-partido');
+    const elProxPartidoSub = document.getElementById('dash-proximo-partido-sub');
+    const partidosFuturos = (partidos || []).filter(p => {
+        if (!p.fecha) return false;
+        const horaStr = p.hora || '00:00';
+        return new Date(`${p.fecha}T${horaStr}`) >= ahora;
+    }).sort((a, b) => new Date(`${a.fecha}T${a.hora || '00:00'}`) - new Date(`${b.fecha}T${b.hora || '00:00'}`));
+
+    if (elProxPartido) {
+        if (partidosFuturos.length > 0) {
+            const prox = partidosFuturos[0];
+            const eqAct = todosLosEquipos.find(eq => eq.id === (prox.equipoId || equipoIdActivo));
+            const nomMiEquipo = eqAct?.nombre || 'Mi Equipo';
+            const nomRival = prox.rival || 'Rival';
+            const esLoc = prox.esLocal !== false;
+            const vsTexto = esLoc ? `${nomMiEquipo} vs ${nomRival}` : `${nomRival} vs ${nomMiEquipo}`;
+            const fechaFormateada = prox.fecha.split('-').reverse().join('/');
+            
+            elProxPartido.innerText = prox.rival ? (esLoc ? `vs ${nomRival}` : `@ ${nomRival}`) : vsTexto;
+            elProxPartido.setAttribute('title', vsTexto);
+            if (elProxPartidoSub) {
+                elProxPartidoSub.innerHTML = `<i class="fa-regular fa-clock mr-1 text-amber-500"></i>${fechaFormateada} - ${prox.hora || 'Por definir'}${prox.lugar ? ` (${prox.lugar})` : ''}`;
+            }
+        } else {
+            elProxPartido.innerText = "Sin programar";
+            if (elProxPartidoSub) elProxPartidoSub.innerText = "No hay partidos futuros";
+        }
+    }
+
+    // 2. Filtrar partidos jugados hasta la fecha (finalizados o cuya fecha/hora ya ha pasado)
+    const partidosJugados = (partidos || []).filter(p => {
+        if (p.cronometro?.periodo === 'Finalizado') return true;
+        if (!p.fecha) return false;
+        const hStr = p.hora || '00:00';
+        const d = new Date(`${p.fecha}T${hStr}`);
+        return d < ahora;
+    });
+
+    const numPartidosJugados = partidosJugados.length;
     if (badgePartidos) {
-        badgePartidos.innerText = `${numPartidosTotal} partido${numPartidosTotal === 1 ? '' : 's'}`;
+        badgePartidos.innerText = `${numPartidosJugados} partido${numPartidosJugados === 1 ? '' : 's'} jugado${numPartidosJugados === 1 ? '' : 's'}`;
     }
 
     // Inicializar acumulación global de jugadores del equipo activo
@@ -2263,21 +2311,19 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
     });
 
     try {
-        // Fetch efemérides de todos los partidos del equipo
-        const efemPromises = (partidos || []).map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')));
+        // Fetch efemérides de los partidos jugados hasta la fecha
+        const efemPromises = partidosJugados.map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')));
         const snaps = await Promise.all(efemPromises);
 
         let distribucionUltimo = {};
         let distribucionTodos = {};
 
         // Identificar último partido finalizado para el gráfico
-        const hoyStr = ahora.toISOString().split('T')[0];
-        const finalizados = (partidos || []).filter(p => p.cronometro?.periodo === 'Finalizado' || (new Date(`${p.fecha}T${p.hora}`) < ahora && p.fecha !== hoyStr));
-        finalizados.sort((a,b) => new Date(`${b.fecha}T${b.hora}`) - new Date(`${a.fecha}T${a.hora}`));
-        const ultimoPartido = finalizados[0];
+        const finalizadosOrdenados = [...partidosJugados].sort((a,b) => new Date(`${b.fecha}T${b.hora || '00:00'}`) - new Date(`${a.fecha}T${a.hora || '00:00'}`));
+        const ultimoPartido = finalizadosOrdenados[0];
 
         snaps.forEach((snap, idx) => {
-            const partidoActual = partidos[idx];
+            const partidoActual = partidosJugados[idx];
             const esUltimo = ultimoPartido && partidoActual.id === ultimoPartido.id;
             const pConfigAcc = partidoActual.configAcciones || DEFAULT_ACCIONES;
 
@@ -2332,24 +2378,26 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
             });
         });
 
-        // 1. Render Top 3 en Dashboard
+        // 1. Render TOP 5 Líderes en Dashboard con total y media por partidos jugados
         if (containerTop3) {
-            const getTop3 = (key) => Object.values(statsGlobales)
+            const divisorPartidos = Math.max(1, numPartidosJugados);
+            const getTop5 = (key) => Object.values(statsGlobales)
                 .filter(p => p[key] > 0)
                 .sort((a, b) => b[key] - a[key])
-                .slice(0, 3)
+                .slice(0, 5)
                 .map(p => ({
                     id: p.id,
                     nombre: p.nombre,
                     dorsal: p.dorsal,
-                    valor: p[key]
+                    valor: p[key],
+                    media: (p[key] / divisorPartidos).toFixed(1)
                 }));
 
             containerTop3.innerHTML = [
-                renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop3('faltasRecibidas')),
-                renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop3('faltasCometidas')),
-                renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop3('tPuerta')),
-                renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop3('tFuera'))
+                renderTop3CardHTML('Faltas Recibidas', 'fa-shield-halved', 'text-blue-500', 'bg-blue-50', getTop5('faltasRecibidas')),
+                renderTop3CardHTML('Faltas Cometidas', 'fa-gavel', 'text-amber-600', 'bg-amber-50', getTop5('faltasCometidas')),
+                renderTop3CardHTML('Tiros a Puerta', 'fa-bullseye', 'text-emerald-500', 'bg-emerald-50', getTop5('tPuerta')),
+                renderTop3CardHTML('Tiros Fuera', 'fa-xmark', 'text-slate-500', 'bg-slate-100', getTop5('tFuera'))
             ].join('');
         }
 

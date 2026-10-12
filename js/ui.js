@@ -206,7 +206,9 @@ export function renderTop3CardHTML(titulo, iconClass, colorClass, bgLightClass, 
     const medallas = [
         { badge: '1º', bg: 'bg-amber-100 text-amber-800 border-amber-300' },
         { badge: '2º', bg: 'bg-slate-100 text-slate-700 border-slate-300' },
-        { badge: '3º', bg: 'bg-orange-100 text-orange-800 border-orange-300' }
+        { badge: '3º', bg: 'bg-orange-100 text-orange-800 border-orange-300' },
+        { badge: '4º', bg: 'bg-slate-50 text-slate-600 border-slate-200' },
+        { badge: '5º', bg: 'bg-slate-50 text-slate-600 border-slate-200' }
     ];
 
     let itemsHtml = '';
@@ -221,7 +223,8 @@ export function renderTop3CardHTML(titulo, iconClass, colorClass, bgLightClass, 
         itemsHtml = `
             <div class="space-y-1.5">
                 ${items.map((item, idx) => {
-                    const m = medallas[idx] || medallas[2];
+                    const m = medallas[idx] || { badge: `${idx + 1}º`, bg: 'bg-slate-50 text-slate-600 border-slate-200' };
+                    const tieneMedia = item.media !== undefined && item.media !== null;
                     return `
                         <div class="flex items-center justify-between p-1.5 sm:p-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors border border-slate-100">
                             <div class="flex items-center gap-1.5 sm:gap-2 min-w-0">
@@ -232,9 +235,16 @@ export function renderTop3CardHTML(titulo, iconClass, colorClass, bgLightClass, 
                                     ${item.dorsal ? '#' + item.dorsal + ' ' : ''}${item.nombre}
                                 </span>
                             </div>
-                            <span class="ml-2 font-black text-xs sm:text-sm px-2 py-0.5 rounded-md ${bgLightClass} ${colorClass} shrink-0">
-                                ${item.valor} ${suffix}
-                            </span>
+                            <div class="flex items-center gap-1.5 ml-2 shrink-0">
+                                <span class="font-black text-xs sm:text-sm px-2 py-0.5 rounded-md ${bgLightClass} ${colorClass}" title="Total acumulado">
+                                    ${item.valor} ${suffix}
+                                </span>
+                                ${tieneMedia ? `
+                                    <span class="text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded bg-white text-slate-500 border border-slate-200 whitespace-nowrap" title="Media por partido">
+                                        <i class="fa-solid fa-chart-line text-[9px] mr-0.5 text-slate-400"></i>${item.media}/p
+                                    </span>
+                                ` : ''}
+                            </div>
                         </div>
                     `;
                 }).join('')}
