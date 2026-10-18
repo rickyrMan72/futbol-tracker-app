@@ -2496,7 +2496,7 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
 
         document.getElementById('dash-chart-title').innerText = `Último Partido: ${ultimoPartido.esLocal === false ? ultimoPartido.rival + ' - Mi Eq.' : 'Mi Eq. - ' + ultimoPartido.rival}`;
 
-        const numPartidosMedia = finalizados.slice(0, 20).length || 1;
+        const numPartidosMedia = finalizadosOrdenados.slice(0, 20).length || 1;
         let allKeys = Array.from(new Set([...Object.keys(distribucionUltimo), ...Object.keys(distribucionTodos)]));
         allKeys = allKeys.filter(k => (distribucionUltimo[k] || 0) > 0 || ((distribucionTodos[k] || 0) / numPartidosMedia) >= 0.5);
 
