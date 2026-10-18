@@ -2322,6 +2322,34 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
         const finalizadosOrdenados = [...partidosJugados].sort((a,b) => new Date(`${b.fecha}T${b.hora || '00:00'}`) - new Date(`${a.fecha}T${a.hora || '00:00'}`));
         const ultimoPartido = finalizadosOrdenados[0];
 
+        // Mapeo estructurado para el gráfico según los requisitos:
+        // Categorías definidas y en orden estricto:
+        // 1. Asistencias
+        // 2. Goles propios (Goles con el pie, Goles de cabeza, goles de falta y gol olímpico)
+        // 3. Gol rival
+        // 4. Tiros Propios (Tiro a puerta + Tiro fuera)
+        // 5. Tiros Rival (Tiro rival + Parada)
+        // 6. Falta cometida
+        // 7. Falta recibida
+        // 8. T. Amarillas (Tarjeta Amarilla)
+        const METRICAS_GRAFICO = [
+            "Asistencias",
+            "Goles propios",
+            "Gol rival",
+            "Tiros Propios",
+            "Tiros Rival",
+            "Falta cometida",
+            "Falta recibida",
+            "T. Amarillas"
+        ];
+
+        let metricasUltimo = {};
+        let metricasTodos = {};
+        METRICAS_GRAFICO.forEach(m => {
+            metricasUltimo[m] = 0;
+            metricasTodos[m] = 0;
+        });
+
         snaps.forEach((snap, idx) => {
             const partidoActual = partidosJugados[idx];
             const esUltimo = ultimoPartido && partidoActual.id === ultimoPartido.id;
@@ -2332,15 +2360,38 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                 const jId = data.jugadorId;
                 const eTipo = (data.tipo || data.accionId || '').toLowerCase();
                 const accInfo = pConfigAcc ? pConfigAcc.find(a => a.id === eTipo) : null;
-                const accNombre = data.nombre || (accInfo ? accInfo.nombre : eTipo);
+                const accNombre = (data.nombre || (accInfo ? accInfo.nombre : eTipo) || '').toLowerCase();
 
-                if (accInfo || accNombre) {
-                    if (esUltimo) {
-                        distribucionUltimo[accNombre] = (distribucionUltimo[accNombre] || 0) + 1;
-                    }
-                    distribucionTodos[accNombre] = (distribucionTodos[accNombre] || 0) + 1;
+                // Clasificar en las categorías solicitadas para el gráfico
+                let categoriaGrafico = null;
+
+                if (eTipo === 'asistencia' || accNombre.includes('asistencia')) {
+                    categoriaGrafico = "Asistencias";
+                } else if (eTipo === 'gol-rival' || accNombre.includes('gol rival')) {
+                    categoriaGrafico = "Gol rival";
+                } else if (eTipo.startsWith('gol-') || accNombre.includes('gol')) {
+                    // Goles propios (pie, cabeza, falta, olímpico, etc.)
+                    categoriaGrafico = "Goles propios";
+                } else if (eTipo === 'tiro-puerta' || eTipo === 'tiro-fuera' || accNombre.includes('tiro a puerta') || accNombre.includes('tiro fuera')) {
+                    categoriaGrafico = "Tiros Propios";
+                } else if (eTipo === 'tiro-rival' || eTipo === 'parada' || accNombre.includes('tiro rival') || accNombre.includes('parada')) {
+                    categoriaGrafico = "Tiros Rival";
+                } else if (eTipo === 'falta-cometida' || accNombre.includes('falta cometida')) {
+                    categoriaGrafico = "Falta cometida";
+                } else if (eTipo === 'falta-recibida' || accNombre.includes('falta recibida')) {
+                    categoriaGrafico = "Falta recibida";
+                } else if (eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNombre.includes('amarilla')) {
+                    categoriaGrafico = "T. Amarillas";
                 }
 
+                if (categoriaGrafico) {
+                    if (esUltimo) {
+                        metricasUltimo[categoriaGrafico] = (metricasUltimo[categoriaGrafico] || 0) + 1;
+                    }
+                    metricasTodos[categoriaGrafico] = (metricasTodos[categoriaGrafico] || 0) + 1;
+                }
+
+                // Acumulación individual para líderes de plantilla y tarjetas
                 if (jId) {
                     if (!statsGlobales[jId]) {
                         const jug = todosLosJugadores.find(x => x.id === jId);
@@ -2494,74 +2545,95 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
             return;
         }
 
-        document.getElementById('dash-chart-title').innerText = `Último Partido: ${ultimoPartido.esLocal === false ? ultimoPartido.rival + ' - Mi Eq.' : 'Mi Eq. - ' + ultimoPartido.rival}`;
+        const rivalNom = ultimoPartido.rival || 'Rival';
+        const equipoNom = todosLosEquipos.find(eq => eq.id === (ultimoPartido.equipoId || equipoIdActivo))?.nombre || 'Mi Eq.';
+        const matchTitleChart = ultimoPartido.esLocal === false ? `${rivalNom} - ${equipoNom}` : `${equipoNom} - ${rivalNom}`;
+        document.getElementById('dash-chart-title').innerText = `Último Partido: ${matchTitleChart}`;
 
-        const numPartidosMedia = finalizadosOrdenados.slice(0, 20).length || 1;
-        let allKeys = Array.from(new Set([...Object.keys(distribucionUltimo), ...Object.keys(distribucionTodos)]));
-        allKeys = allKeys.filter(k => (distribucionUltimo[k] || 0) > 0 || ((distribucionTodos[k] || 0) / numPartidosMedia) >= 0.5);
+        const numPartidosMedia = Math.max(1, numPartidosJugados);
+        const allKeys = METRICAS_GRAFICO;
 
-        if (allKeys.length > 0) {
-            cardChart.classList.remove('hidden');
-            const canvas = document.getElementById('rendimientoChart');
-            if (window.dashChartInstance) window.dashChartInstance.destroy();
-            
-            if (!window.Chart) {
-                try {
-                    await new Promise((resolve, reject) => {
-                        const s = document.createElement('script');
-                        s.src = "https://cdn.jsdelivr.net/npm/chart.js";
-                        s.onload = resolve;
-                        s.onerror = reject;
-                        document.head.appendChild(s);
-                    });
-                } catch(e) {}
-            }
-
-            if (window.Chart) {
-                window.dashChartInstance = new Chart(canvas, {
-                    type: 'bar',
-                    data: {
-                        labels: allKeys,
-                        datasets: [
-                            {
-                                label: 'Último partido',
-                                data: allKeys.map(k => distribucionUltimo[k] || 0),
-                                backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                                borderColor: 'rgb(5, 150, 105)',
-                                borderWidth: 1,
-                                borderRadius: 4,
-                                order: 2
-                            },
-                            {
-                                label: `Media (${numPartidosMedia} part.)`,
-                                data: allKeys.map(k => Number(((distribucionTodos[k] || 0) / numPartidosMedia).toFixed(1))),
-                                type: 'line',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                borderColor: 'rgb(59, 130, 246)',
-                                borderWidth: 2,
-                                pointBackgroundColor: 'rgb(59, 130, 246)',
-                                pointRadius: 4,
-                                borderDash: [5, 5],
-                                order: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { 
-                            legend: { 
-                                display: true, 
-                                position: 'top',
-                                labels: { boxWidth: 12, font: { size: 11 } }
-                            } 
-                        },
-                        scales: { y: { beginAtZero: true } }
-                    }
+        cardChart.classList.remove('hidden');
+        const canvas = document.getElementById('rendimientoChart');
+        if (window.dashChartInstance) window.dashChartInstance.destroy();
+        
+        if (!window.Chart) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = "https://cdn.jsdelivr.net/npm/chart.js";
+                    s.onload = resolve;
+                    s.onerror = reject;
+                    document.head.appendChild(s);
                 });
-            }
-        } else {
-            cardChart.classList.add('hidden');
+            } catch(e) {}
+        }
+
+        if (window.Chart) {
+            window.dashChartInstance = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: allKeys,
+                    datasets: [
+                        {
+                            label: 'Último partido',
+                            data: allKeys.map(k => metricasUltimo[k] || 0),
+                            backgroundColor: 'rgba(52, 211, 153, 0.85)',
+                            borderColor: 'rgb(16, 185, 129)',
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            order: 2
+                        },
+                        {
+                            label: `Media (${numPartidosMedia} part.)`,
+                            data: allKeys.map(k => Number(((metricasTodos[k] || 0) / numPartidosMedia).toFixed(1))),
+                            type: 'line',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderColor: 'rgb(59, 130, 246)',
+                            borderWidth: 2,
+                            pointBackgroundColor: 'rgb(59, 130, 246)',
+                            pointRadius: 4,
+                            borderDash: [5, 5],
+                            tension: 0.25,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { 
+                            display: true, 
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { size: 12, weight: '500' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    return `${context.dataset.label}: ${val}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true,
+                            ticks: { precision: 0, stepSize: 1 },
+                            grid: { color: 'rgba(226, 232, 240, 0.8)' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 11, weight: '500' },
+                                maxRotation: 25,
+                                minRotation: 0
+                            }
+                        }
+                    }
+                }
+            });
         }
     } catch (e) {
         console.error("No se pudieron cargar estadisticas del dashboard:", e);
