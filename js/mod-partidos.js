@@ -2640,3 +2640,248 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
         if (cardChart) cardChart.classList.add('hidden');
     }
 }
+
+export async function obtenerEstadisticasJugador(jugadorId, eqId = null) {
+    const targetEqId = eqId || equipoIdActivo;
+    if (!jugadorId || !targetEqId) return null;
+
+    const ahora = new Date();
+    let partidosLista = todosLosPartidos.filter(p => p.equipoId === targetEqId);
+    if (partidosLista.length === 0 && auth.currentUser) {
+        try {
+            const q = query(collection(db, 'partidos'), where('equipoId', '==', targetEqId));
+            const snap = await getDocs(q);
+            snap.forEach(d => partidosLista.push({ id: d.id, ...d.data() }));
+        } catch (err) {
+            console.warn("Error consultando partidos del jugador:", err);
+        }
+    }
+
+    // Filtrar únicamente partidos disputados hasta la fecha (finalizados o fecha/hora ya pasada)
+    const partidosJugadosEquipo = partidosLista.filter(p => {
+        if (p.cronometro?.periodo === 'Finalizado') return true;
+        if (!p.fecha) return false;
+        const hStr = p.hora || '00:00';
+        return new Date(`${p.fecha}T${hStr}`) < ahora;
+    }).sort((a, b) => new Date(`${a.fecha}T${a.hora || '00:00'}`) - new Date(`${b.fecha}T${b.hora || '00:00'}`));
+
+    const equipoObj = todosLosEquipos.find(e => e.id === targetEqId);
+    const esF7 = equipoObj?.modalidad === 'Fútbol 7';
+    const duracionReglamentaria = esF7 ? 50 : 90;
+
+    // Cargar efemérides de cada partido jugado
+    const efemSnaps = await Promise.all(
+        partidosJugadosEquipo.map(p => getDocs(collection(db, 'partidos', p.id, 'efemerides')))
+    );
+
+    const totales = {
+        partidosEquipo: partidosJugadosEquipo.length,
+        convocatorias: 0,
+        jugados: 0,
+        titularidades: 0,
+        suplencias: 0,
+        minutos: 0,
+        goles: 0,
+        asistencias: 0,
+        tirosPuerta: 0,
+        tirosFuera: 0,
+        paradas: 0,
+        golesEncajadosEnCampo: 0,
+        faltasRecibidas: 0,
+        faltasCometidas: 0,
+        amarillas: 0,
+        rojas: 0,
+        recuperaciones: 0,
+        pasesCorrectos: 0,
+        valoracionTotal: 0
+    };
+
+    const historial = [];
+
+    partidosJugadosEquipo.forEach((par, idx) => {
+        const snap = efemSnaps[idx];
+        const efemerides = [];
+        snap.forEach(d => efemerides.push({ id: d.id, ...d.data() }));
+        efemerides.sort(compararEfemeridesAsc);
+
+        const configAcc = par.configAcciones || DEFAULT_ACCIONES;
+        const convocados = par.convocados || [];
+        const titulares = par.titulares || [];
+
+        const esConvocado = convocados.includes(jugadorId) || titulares.includes(jugadorId);
+        const esTitular = titulares.includes(jugadorId);
+
+        const minCrono = par.cronometro?.tiempoAcumulado ? Math.floor(par.cronometro.tiempoAcumulado / 60000) : 0;
+        const minFinal = minCrono > 0 ? minCrono : duracionReglamentaria;
+
+        let entrada = esTitular ? 0 : null;
+        let minsPartido = 0;
+        let jugoEnPartido = esTitular;
+
+        let golesP = 0;
+        let asisP = 0;
+        let tPuertaP = 0;
+        let tFueraP = 0;
+        let paradasP = 0;
+        let golesEncP = 0;
+        let fRecP = 0;
+        let fComP = 0;
+        let amarP = 0;
+        let rojP = 0;
+        let recupP = 0;
+        let pasesP = 0;
+        let scoreP = 0;
+
+        efemerides.forEach(ef => {
+            const eTipo = (ef.tipo || ef.accionId || '').toLowerCase();
+            const accInfo = configAcc.find(a => (a.id || '').toLowerCase() === eTipo);
+            const accNom = (ef.nombre || accInfo?.nombre || eTipo || '').toLowerCase();
+
+            let minEv = 0;
+            if (ef.tiempoAnotado) {
+                minEv = parseInt(String(ef.tiempoAnotado).split(':')[0], 10) || 0;
+            } else if (ef.minutoMs !== undefined) {
+                minEv = Math.floor(ef.minutoMs / 60000);
+            } else if (ef.minuto !== undefined) {
+                minEv = parseInt(ef.minuto, 10) || 0;
+            }
+
+            // Control de sustituciones para minutos exactos y saber si está en el campo
+            if (eTipo === 'sustitucion' || eTipo === 'sustitucion-lesion' || eTipo === 'cambio') {
+                const saleId = ef.jugadorId || ef.jugadorSaleId;
+                const entraId = ef.jugadorEntraId;
+
+                if (saleId === jugadorId && entrada !== null) {
+                    minsPartido += Math.max(0, minEv - entrada);
+                    entrada = null;
+                }
+                if (entraId === jugadorId) {
+                    jugoEnPartido = true;
+                    if (entrada === null) {
+                        entrada = minEv;
+                    }
+                }
+            }
+
+            // Goles encajados mientras el jugador (ej. portero) está en el campo
+            if ((eTipo === 'gol-rival' || accNom.includes('gol rival')) && entrada !== null) {
+                golesEncP++;
+            }
+
+            // Acciones propias del jugador
+            if (ef.jugadorId === jugadorId) {
+                jugoEnPartido = true;
+
+                if (eTipo.startsWith('gol-') && eTipo !== 'gol-rival') {
+                    golesP++;
+                } else if (!eTipo.includes('rival') && accNom.includes('gol') && !accNom.includes('parada')) {
+                    golesP++;
+                }
+
+                if (eTipo === 'asistencia' || accNom.includes('asistencia')) {
+                    asisP++;
+                }
+                if (eTipo === 'tiro-puerta' || accNom.includes('tiro a puerta')) {
+                    tPuertaP++;
+                }
+                if (eTipo === 'tiro-fuera' || accNom.includes('tiro fuera')) {
+                    tFueraP++;
+                }
+                // Paradas extensible a futuros tipos como "parada-gol" / "Parada de gol"
+                if (eTipo.startsWith('parada') || accNom.includes('parada')) {
+                    paradasP++;
+                }
+                if (eTipo === 'falta-recibida' || accNom.includes('falta recibida')) {
+                    fRecP++;
+                }
+                if (eTipo === 'falta-cometida' || accNom.includes('falta cometida')) {
+                    fComP++;
+                }
+                if (eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNom.includes('amarilla')) {
+                    amarP++;
+                }
+                if (eTipo === 'roja' || eTipo === 'tarjeta-roja' || accNom.includes('roja')) {
+                    rojP++;
+                    if (entrada !== null) {
+                        minsPartido += Math.max(0, minEv - entrada);
+                        entrada = null;
+                    }
+                }
+                if (eTipo === 'recuperacion' || accNom.includes('recuperaci')) {
+                    recupP++;
+                }
+                if (eTipo === 'pase-correcto' || accNom.includes('pase correcto')) {
+                    pasesP++;
+                }
+
+                if (accInfo) {
+                    if (accInfo.score !== undefined) {
+                        scoreP += parseFloat(accInfo.score) || 0;
+                    } else if (accInfo.isPositive === true) {
+                        scoreP += 1;
+                    } else if (accInfo.isPositive === false) {
+                        scoreP -= 1;
+                    }
+                }
+            }
+        });
+
+        // Cerrar tramo de minutos si terminó el partido en el campo
+        if (entrada !== null) {
+            const cierreMin = minFinal > entrada ? minFinal : entrada + 1;
+            minsPartido += Math.max(0, cierreMin - entrada);
+        }
+
+        if (esConvocado || jugoEnPartido) {
+            totales.convocatorias++;
+        }
+
+        if (jugoEnPartido) {
+            totales.jugados++;
+            if (esTitular) totales.titularidades++;
+            else totales.suplencias++;
+
+            totales.minutos += minsPartido;
+            totales.goles += golesP;
+            totales.asistencias += asisP;
+            totales.tirosPuerta += tPuertaP;
+            totales.tirosFuera += tFueraP;
+            totales.paradas += paradasP;
+            totales.golesEncajadosEnCampo += golesEncP;
+            totales.faltasRecibidas += fRecP;
+            totales.faltasCometidas += fComP;
+            totales.amarillas += amarP;
+            totales.rojas += rojP;
+            totales.recuperaciones += recupP;
+            totales.pasesCorrectos += pasesP;
+            totales.valoracionTotal += scoreP;
+        }
+
+        if (esConvocado || jugoEnPartido) {
+            historial.push({
+                partidoId: par.id,
+                fecha: par.fecha || '',
+                rival: par.rival || 'Rival',
+                esLocal: par.esLocal !== false,
+                resultado: par.resultado || '-',
+                rol: esTitular ? 'Titular' : (jugoEnPartido ? 'Suplente' : 'Sin minutos'),
+                jugo: jugoEnPartido,
+                minutos: minsPartido,
+                goles: golesP,
+                asistencias: asisP,
+                tirosTotal: tPuertaP + tFueraP,
+                paradas: paradasP,
+                golesEncajados: golesEncP,
+                amarillas: amarP,
+                rojas: rojP,
+                valoracion: Number(scoreP.toFixed(1))
+            });
+        }
+    });
+
+    return {
+        totales,
+        historial
+    };
+}
+
