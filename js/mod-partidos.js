@@ -6,6 +6,7 @@ import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL, calcularJugadoresEnCampo } fr
 import { getGlobalAcciones } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
+export let valoracionesMediasJugadores = {};
 let unsubPartidos = null;
 const contenedor = document.getElementById('lista-partidos-container');
 
@@ -865,6 +866,8 @@ export function renderizarPartidos() {
         if (elProxPartidoSub) elProxPartidoSub.innerText = "Selecciona un equipo";
         const badgePartidos = document.getElementById('dash-partidos-count-badge');
         if (badgePartidos) badgePartidos.innerText = "0 partidos jugados";
+        valoracionesMediasJugadores = {};
+        document.dispatchEvent(new Event('valoracionesActualizadas'));
         return;
     }
     
@@ -2306,7 +2309,9 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
             tPuerta: 0,
             tFuera: 0,
             amarillas: 0,
-            rojas: 0
+            rojas: 0,
+            partidosJugados: 0,
+            valoracionTotal: 0
         };
     });
 
@@ -2354,13 +2359,18 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
             const partidoActual = partidosJugados[idx];
             const esUltimo = ultimoPartido && partidoActual.id === ultimoPartido.id;
             const pConfigAcc = partidoActual.configAcciones || DEFAULT_ACCIONES;
+            const participantesPartido = new Set((partidoActual.titulares || []).filter(Boolean));
 
             snap.forEach(d => {
                 const data = d.data();
                 const jId = data.jugadorId;
                 const eTipo = (data.tipo || data.accionId || '').toLowerCase();
-                const accInfo = pConfigAcc ? pConfigAcc.find(a => a.id === eTipo) : null;
+                const accInfo = pConfigAcc ? pConfigAcc.find(a => (a.id || '').toLowerCase() === eTipo) : null;
                 const accNombre = (data.nombre || (accInfo ? accInfo.nombre : eTipo) || '').toLowerCase();
+
+                if ((eTipo === 'sustitucion' || eTipo === 'sustitucion-lesion' || eTipo === 'cambio') && data.jugadorEntraId) {
+                    participantesPartido.add(data.jugadorEntraId);
+                }
 
                 // Clasificar en las categorías solicitadas para el gráfico
                 let categoriaGrafico = null;
@@ -2391,8 +2401,9 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                     metricasTodos[categoriaGrafico] = (metricasTodos[categoriaGrafico] || 0) + 1;
                 }
 
-                // Acumulación individual para líderes de plantilla y tarjetas
+                // Acumulación individual para líderes de plantilla, tarjetas y valoración media
                 if (jId) {
+                    participantesPartido.add(jId);
                     if (!statsGlobales[jId]) {
                         const jug = todosLosJugadores.find(x => x.id === jId);
                         statsGlobales[jId] = {
@@ -2405,7 +2416,9 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                             tPuerta: 0,
                             tFuera: 0,
                             amarillas: 0,
-                            rojas: 0
+                            rojas: 0,
+                            partidosJugados: 0,
+                            valoracionTotal: 0
                         };
                     }
 
@@ -2425,9 +2438,53 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                     } else if (eTipo === 'roja' || eTipo === 'tarjeta-roja' || nomStr.includes('roja')) {
                         sg.rojas++;
                     }
+
+                    if (accInfo) {
+                        if (accInfo.score !== undefined) {
+                            sg.valoracionTotal += parseFloat(accInfo.score) || 0;
+                        } else if (accInfo.isPositive === true) {
+                            sg.valoracionTotal += 1;
+                        } else if (accInfo.isPositive === false) {
+                            sg.valoracionTotal -= 1;
+                        }
+                    }
                 }
             });
+
+            // Sumar partido jugado a cada participante de este encuentro
+            participantesPartido.forEach(pId => {
+                if (!statsGlobales[pId]) {
+                    const jug = todosLosJugadores.find(x => x.id === pId);
+                    statsGlobales[pId] = {
+                        id: pId,
+                        nombre: jug?.nombre || 'Desconocido',
+                        dorsal: jug?.dorsal || '',
+                        posicion: jug?.posicion || '',
+                        faltasRecibidas: 0,
+                        faltasCometidas: 0,
+                        tPuerta: 0,
+                        tFuera: 0,
+                        amarillas: 0,
+                        rojas: 0,
+                        partidosJugados: 0,
+                        valoracionTotal: 0
+                    };
+                }
+                statsGlobales[pId].partidosJugados++;
+            });
         });
+
+        // Actualizar diccionario exportado de valoraciones medias para la vista de Plantilla
+        const nuevasValoraciones = {};
+        Object.values(statsGlobales).forEach(sg => {
+            nuevasValoraciones[sg.id] = {
+                jugados: sg.partidosJugados,
+                total: Number(sg.valoracionTotal.toFixed(1)),
+                media: sg.partidosJugados > 0 ? Number((sg.valoracionTotal / sg.partidosJugados).toFixed(1)) : null
+            };
+        });
+        valoracionesMediasJugadores = nuevasValoraciones;
+        document.dispatchEvent(new Event('valoracionesActualizadas'));
 
         // 1. Render TOP 5 Líderes en Dashboard con total y media por partidos jugados
         if (containerTop3) {

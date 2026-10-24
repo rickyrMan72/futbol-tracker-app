@@ -1,6 +1,6 @@
 import { db, collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc, query, where, auth } from './firebase-config.js';
 import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
-import { obtenerEstadisticasJugador } from './mod-partidos.js';
+import { obtenerEstadisticasJugador, valoracionesMediasJugadores } from './mod-partidos.js';
 
 export let todosLosJugadores = [];
 export let equipoIdActivo = null;
@@ -9,6 +9,7 @@ let radarChartInstance = null;
 let jugadorEvolucionChartInstance = null;
 let jugadorActivoModal = null;
 let statsCargadasJugadorId = null;
+let valoracionesListenerBound = false;
 
 const contenedor = document.getElementById('lista-jugadores-container');
 let viewMode = localStorage.getItem('plantillaViewMode') || 'cards';
@@ -540,6 +541,13 @@ export function setEquipoActivo(id) {
 export function initJugadores() {
     if (!auth.currentUser) return;
 
+    if (!valoracionesListenerBound) {
+        document.addEventListener('valoracionesActualizadas', () => {
+            if (equipoIdActivo) renderizar();
+        });
+        valoracionesListenerBound = true;
+    }
+
     const btnTabPerfil = document.getElementById('btn-tab-jug-perfil');
     const btnTabStats = document.getElementById('btn-tab-jug-stats');
     if (btnTabPerfil && btnTabStats) {
@@ -730,6 +738,10 @@ function renderizar() {
     jugadoresEquipo.forEach(jug => {
         let color = jug.estado === 'Tocado' ? 'bg-amber-500' : (jug.estado === 'Lesionado' ? 'bg-red-500' : 'bg-emerald-500');
         const stats = jug.stats || { media: 50, ritmo: 50, tiro: 50, pase: 50, regate: 50, defensa: 50, fisico: 50 };
+        const valData = valoracionesMediasJugadores[jug.id];
+        const tienePartidos = Boolean(valData && valData.jugados > 0 && valData.media !== null);
+        const valNum = tienePartidos ? valData.media : null;
+        const valStr = tienePartidos ? (valNum > 0 ? `+${valNum.toFixed(1)}` : valNum.toFixed(1)) : '—';
         
         if (viewMode === 'table') {
             contenedor.className = 'w-full overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-sm';
@@ -742,7 +754,8 @@ function renderizar() {
                                 <th class="px-4 py-3 font-semibold">Dorsal</th>
                                 <th class="px-4 py-3 font-semibold">Jugador</th>
                                 <th class="px-4 py-3 font-semibold">Posición</th>
-                                <th class="px-4 py-3 font-semibold text-center">Media</th>
+                                <th class="px-4 py-3 font-semibold text-center" title="Atributo general de ficha">Media</th>
+                                <th class="px-4 py-3 font-semibold text-center" title="Valoración media por partido jugado">Val. Media</th>
                                 <th class="px-4 py-3 font-semibold">Estado</th>
                                 <th class="px-4 py-3 font-semibold text-right">Acciones</th>
                             </tr>
@@ -750,6 +763,20 @@ function renderizar() {
                         <tbody id="table-jugadores-body" class="divide-y divide-slate-100">
                         </tbody>
                     </table>
+                `;
+            }
+
+            let badgeValTable = `<span class="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-50 text-slate-400 text-xs font-medium border border-slate-200" title="Sin partidos disputados">—</span>`;
+            if (tienePartidos) {
+                const tableValColor = valNum > 0
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                    : (valNum < 0 ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200');
+                badgeValTable = `
+                    <button type="button" class="btn-stats-jug inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md font-bold text-xs border transition-colors ${tableValColor}" title="Ver rendimiento (${valData.jugados} ${valData.jugados === 1 ? 'partido' : 'partidos'}, total ${valData.total > 0 ? '+' + valData.total : valData.total} pts)">
+                        <i class="fa-solid fa-chart-line text-[10px] opacity-80"></i>
+                        <span>${valStr}</span>
+                        <span class="text-[10px] font-normal opacity-75">(${valData.jugados} PJ)</span>
+                    </button>
                 `;
             }
 
@@ -772,6 +799,9 @@ function renderizar() {
                 <td class="px-4 py-3 text-center">
                     <span class="inline-flex items-center justify-center w-7 h-7 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">${stats.media}</span>
                 </td>
+                <td class="px-4 py-3 text-center whitespace-nowrap">
+                    ${badgeValTable}
+                </td>
                 <td class="px-4 py-3">
                     <div class="flex items-center">
                         <div class="w-2.5 h-2.5 ${color} rounded-full mr-2"></div>
@@ -780,6 +810,7 @@ function renderizar() {
                 </td>
                 <td class="px-4 py-3 text-right">
                     <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="btn-stats-jug w-8 h-8 bg-white hover:bg-indigo-50 text-indigo-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Rendimiento en Partidos"><i class="fa-solid fa-chart-line text-xs"></i></button>
                         <button class="btn-radar-jug w-8 h-8 bg-white hover:bg-emerald-50 text-emerald-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Ficha y Capacidades"><i class="fa-solid fa-chart-pie text-xs"></i></button>
                         <button class="require-editor btn-edit-jug w-8 h-8 bg-white hover:bg-slate-100 text-blue-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Editar"><i class="fa-solid fa-pen text-xs"></i></button>
                         <button class="require-editor btn-del-jug w-8 h-8 bg-white hover:bg-red-50 text-red-600 rounded-lg border border-slate-200 shadow-sm transition-colors flex items-center justify-center" data-id="${jug.id}" title="Eliminar"><i class="fa-solid fa-trash text-xs"></i></button>
@@ -792,6 +823,12 @@ function renderizar() {
 
         } else {
             contenedor.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6';
+
+            const cardValClasses = !tienePartidos
+                ? 'bg-amber-900/10 text-amber-900/60 border border-amber-900/15'
+                : (valNum > 0
+                    ? 'bg-emerald-600 text-white border border-emerald-700'
+                    : (valNum < 0 ? 'bg-rose-600 text-white border border-rose-700' : 'bg-amber-900/20 text-amber-950 border border-amber-900/30'));
 
             const card = document.createElement('div');
             card.className = 'w-full max-w-[200px] mx-auto bg-gradient-to-br from-amber-200 via-amber-300 to-amber-500 rounded-2xl shadow-lg border border-amber-400 p-3 flex flex-col items-center relative transition-all duration-300 hover:-translate-y-2 hover:shadow-xl group font-sans overflow-hidden cursor-pointer';
@@ -820,7 +857,13 @@ function renderizar() {
                 
                 <div class="text-center w-full relative z-10">
                     <h4 class="font-bold text-amber-950 text-sm uppercase tracking-wider truncate px-1 border-b border-amber-900/20 pb-1">${jug.nombre}</h4>
-                    <div class="text-[10px] text-amber-900 font-bold mb-1 opacity-70">#${jug.dorsal}</div>
+                    <div class="flex items-center justify-center gap-2 my-1">
+                        <span class="text-[10px] text-amber-900 font-bold opacity-75">#${jug.dorsal}</span>
+                        <button type="button" class="btn-stats-jug inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold shadow-xs transition-transform hover:scale-105 ${cardValClasses}" title="${tienePartidos ? `Valoración media: ${valStr} pts/partido (${valData.jugados} PJ)` : 'Sin partidos disputados'}">
+                            <i class="fa-solid fa-chart-line text-[8px]"></i>
+                            <span>${valStr}</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="w-full flex justify-center relative z-10 pb-1">
@@ -845,6 +888,14 @@ function renderizar() {
 }
 
 function bindCardEvents(element, jug, stats) {
+    // Abrir directamente pestaña de rendimiento al pulsar en la valoración media o botón de gráficas
+    element.querySelectorAll('.btn-stats-jug').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirFichaJugador(jug, 'stats');
+        });
+    });
+
     // Abrir ficha al hacer clic en el botón de radar o editar
     const btnRadar = element.querySelector('.btn-radar-jug');
     if (btnRadar) {
@@ -864,7 +915,7 @@ function bindCardEvents(element, jug, stats) {
 
     // Abrir ficha al hacer clic en la tarjeta o fila completa
     element.addEventListener('click', (e) => {
-        if (e.target.closest('.btn-del-jug') || e.target.closest('.btn-edit-jug') || e.target.closest('.btn-radar-jug')) return;
+        if (e.target.closest('.btn-del-jug') || e.target.closest('.btn-edit-jug') || e.target.closest('.btn-radar-jug') || e.target.closest('.btn-stats-jug')) return;
         abrirFichaJugador(jug);
     });
 
