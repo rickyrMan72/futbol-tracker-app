@@ -1,7 +1,7 @@
 import { db, doc, updateDoc, onSnapshot, collection } from './firebase-config.js';
 import { bindModal, mostrarNotificacion } from './ui.js';
 import { equipoIdActivo } from './mod-jugadores.js';
-import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL } from './mod-directo.js';
+import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL, asegurarCornersEnLista } from './mod-directo.js';
 
 let equipoGlobalConfig = null;
 let equipoGlobalConfigRival = null;
@@ -56,7 +56,7 @@ export function subscribeToConfiguracion(equipoId) {
     currentConfigUnsub = onSnapshot(doc(db, 'equipos', equipoId), (docSnap) => {
         if (docSnap.exists()) {
             equipoGlobalConfig = docSnap.data().configAcciones || JSON.parse(JSON.stringify(DEFAULT_ACCIONES));
-            equipoGlobalConfigRival = docSnap.data().configAccionesRival || JSON.parse(JSON.stringify(DEFAULT_ACCIONES_RIVAL));
+            equipoGlobalConfigRival = asegurarCornersEnLista(docSnap.data().configAccionesRival || DEFAULT_ACCIONES_RIVAL);
             renderListaGlobalAcciones();
         }
     }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
@@ -71,9 +71,9 @@ export function getGlobalAcciones() {
 
 export function getGlobalAccionesRival() {
     if (equipoGlobalConfigRival) {
-        return JSON.parse(JSON.stringify(equipoGlobalConfigRival));
+        return asegurarCornersEnLista(equipoGlobalConfigRival);
     }
-    return JSON.parse(JSON.stringify(DEFAULT_ACCIONES_RIVAL));
+    return asegurarCornersEnLista(DEFAULT_ACCIONES_RIVAL);
 }
 
 function abrirModalGlobalAcciones() {

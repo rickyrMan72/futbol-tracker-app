@@ -2,8 +2,8 @@ import { db, collection, addDoc, onSnapshot, getDocs, deleteDoc, doc, updateDoc,
 import { mostrarNotificacion, bindModal, confirmarAccion, extraerTiempoEfemeride, compararEfemeridesAsc, compararEfemeridesDesc, formatearTiempoAnotado, renderTop3CardHTML } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
-import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL, calcularJugadoresEnCampo } from './mod-directo.js';
-import { getGlobalAcciones } from './mod-configuracion.js';
+import { DEFAULT_ACCIONES, DEFAULT_ACCIONES_RIVAL, calcularJugadoresEnCampo, asegurarCornersEnLista } from './mod-directo.js';
+import { getGlobalAcciones, getGlobalAccionesRival } from './mod-configuracion.js';
 
 export let todosLosPartidos = [];
 export let valoracionesMediasJugadores = {};
@@ -416,11 +416,12 @@ export function initPartidos() {
         const ordenTimeline = localStorage.getItem('statsTimelineOrder') || 'asc';
         const sortedEfems = [...efemerides].sort(ordenTimeline === 'desc' ? compararEfemeridesDesc : compararEfemeridesAsc);
 
+        const configRivalPdf = asegurarCornersEnLista(par.configAccionesRival || DEFAULT_ACCIONES_RIVAL);
         const eventosTimelineHtml = sortedEfems.length === 0
             ? '<div style="padding: 40px; text-align: center; color: #94a3b8; font-style: italic;">No hay acciones registradas en el partido.</div>'
             : sortedEfems.map(ef => {
                 const eTipo = ef.tipo || ef.accionId;
-                const acc = configAcc.find(a => a.id === eTipo);
+                const acc = configAcc.find(a => a.id === eTipo) || configRivalPdf.find(a => a.id === eTipo);
                 const icon = ef.icon || (acc ? acc.icon : 'fa-bolt');
                 const cl = ef.color || (acc ? acc.color : 'text-blue-500');
                 const nom = ef.nombre || (acc ? acc.nombre : eTipo);
@@ -428,7 +429,18 @@ export function initPartidos() {
                 const displayTiempo = ef.tiempoAnotado || formatearTiempoAnotado(tInfo.min, tInfo.sec);
                 const isSust = (eTipo === 'sustitucion' || eTipo === 'sustitucion-lesion');
 
-                let jugadorDesc = ef.jugadorNombre ? `#${ef.jugadorDorsal || ''} ${ef.jugadorNombre}` : (ef.rival ? 'Rival' : 'Equipo');
+                const tieneJug = Boolean(ef.jugadorId || (ef.jugadorNombre && ef.jugadorNombre !== 'undefined'));
+                let jugadorDesc = '';
+                if (tieneJug) {
+                    const dTxt = (ef.jugadorDorsal !== undefined && ef.jugadorDorsal !== null && ef.jugadorDorsal !== '' && ef.jugadorDorsal !== 'undefined') ? `#${ef.jugadorDorsal} ` : '';
+                    jugadorDesc = `${dTxt}${ef.jugadorNombre || ''}`;
+                } else if (ef.esPropio || ef.ambito === 'propio' || eTipo === 'corner-favor') {
+                    jugadorDesc = resumen.miEquipoNombre || 'Mi Equipo';
+                } else if (ef.rival || eTipo === 'corner-contra' || (typeof eTipo === 'string' && eTipo.includes('rival'))) {
+                    jugadorDesc = par.rival || 'Rival';
+                } else {
+                    jugadorDesc = 'Equipo';
+                }
                 if (isSust) {
                     jugadorDesc = `<span style="color: #e11d48; font-weight: bold;">Sale: #${ef.jugadorDorsal || ''} ${ef.jugadorNombre || ''}</span> <i class="fa-solid fa-arrow-right-long" style="margin: 0 6px; color: #94a3b8;"></i> <span style="color: #16a34a; font-weight: bold;">Entra: #${ef.jugadorEntraDorsal || ''} ${ef.jugadorEntraNombre || ''}</span>`;
                 }
@@ -454,6 +466,7 @@ export function initPartidos() {
         const resultadoTexto = par.resultado || `${resumen.golesMios || 0} - ${resumen.golesRival || 0}`;
         const totAcc = resumen.totalAcciones || 0;
         const pctPos = totAcc > 0 ? Math.round(((resumen.positivas || 0) / totAcc) * 100) : 0;
+        const cornersTexto = `${resumen.cornersFavor || 0} - ${resumen.cornersContra || 0}`;
 
         wrapper.innerHTML = `
             <!-- ======================= PÁGINA 1: RESUMEN Y LÍDERES ======================= -->
@@ -476,19 +489,23 @@ export function initPartidos() {
                     </div>
                 </div>
 
-                <!-- Resumen Superior (3 tarjetas) -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                <!-- Resumen Superior (4 tarjetas) -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;">
                     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
-                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Resultado Final</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #1e293b; margin-top: 2px;">${resultadoTexto}</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Resultado Final</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #1e293b; margin-top: 2px;">${resultadoTexto}</div>
                     </div>
                     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
-                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Acciones</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #2563eb; margin-top: 2px;">${totAcc}</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Córners (Fav - Con)</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #059669; margin-top: 2px;">${cornersTexto}</div>
                     </div>
                     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
-                        <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">% Acciones Positivas</div>
-                        <div style="font-size: 24px; font-weight: 900; color: #8b5cf6; margin-top: 2px;">${pctPos}%</div>
+                        <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Total Acciones</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #2563eb; margin-top: 2px;">${totAcc}</div>
+                    </div>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; text-align: center;">
+                        <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">% Acciones Pos.</div>
+                        <div style="font-size: 22px; font-weight: 900; color: #8b5cf6; margin-top: 2px;">${pctPos}%</div>
                     </div>
                 </div>
 
@@ -812,6 +829,7 @@ export function initPartidos() {
                     periodo: '1ª Parte'
                 };
                 data.configAcciones = getGlobalAcciones();
+                data.configAccionesRival = getGlobalAccionesRival();
                 if (!auth.currentUser) throw new Error("No autenticado");
                 await addDoc(collection(db, 'partidos'), data); 
                 mostrarNotificacion("Partido guardado"); 
@@ -1358,10 +1376,13 @@ async function abrirEstadisticas(par) {
     
     efemerides.sort(compararEfemeridesAsc);
     const configAcc = par.configAcciones || DEFAULT_ACCIONES;
+    const configRivalStats = asegurarCornersEnLista(par.configAccionesRival || DEFAULT_ACCIONES_RIVAL);
     
     // Procesar estadisticas
     let golesMios = 0;
     let golesRival = 0;
+    let cornersFavor = 0;
+    let cornersContra = 0;
     let totalAcciones = efemerides.length;
     let positivas = 0;
     
@@ -1379,13 +1400,15 @@ async function abrirEstadisticas(par) {
     let iconByAcc = {};
     
     const twColors = {
-      emerald: '#10b981', blue: '#3b82f6', amber: '#f59e0b', rose: '#f43f5e', 
+      emerald: '#10b981', blue: '#3b82f6', amber: '#f59e0b', yellow: '#facc15', rose: '#f43f5e', 
       slate: '#64748b', purple: '#a855f7', indigo: '#6366f1', red: '#ef4444'
     };
     
     efemerides.forEach(ef => {
         const eTipo = ef.tipo || ef.accionId;
-        const accInfo = configAcc.find(a => a.id === eTipo);
+        const accInfoPropio = configAcc.find(a => a.id === eTipo);
+        const accInfoRival = configRivalStats.find(a => a.id === eTipo);
+        const accInfo = accInfoPropio || accInfoRival;
         const accNombre = ef.nombre || (accInfo ? accInfo.nombre : eTipo);
         let minParse = 0;
         if (ef.tiempoAnotado) {
@@ -1406,17 +1429,18 @@ async function abrirEstadisticas(par) {
             
             if (!colorByAcc[accNombre]) {
                 let colorHex = '#64748b';
-                if (accInfo && accInfo.color) {
-                    const match = accInfo.color.match(/(emerald|blue|amber|rose|slate|purple|indigo|red)/);
+                const colorClassRef = ef.color || (accInfo && accInfo.color) || '';
+                if (colorClassRef) {
+                    const match = colorClassRef.match(/(emerald|blue|amber|yellow|rose|slate|purple|indigo|red)/);
                     if (match) colorHex = twColors[match[1]];
                 }
                 colorByAcc[accNombre] = colorHex;
             }
             if (!iconByAcc[accNombre]) {
-                iconByAcc[accNombre] = (accInfo && accInfo.icon) ? accInfo.icon : 'fa-circle';
+                iconByAcc[accNombre] = ef.icon || ((accInfo && accInfo.icon) ? accInfo.icon : 'fa-circle');
             }
             
-            if (accInfo && accInfo.isPositive) positivas++;
+            if ((accInfo && accInfo.isPositive) || ef.isPositive) positivas++;
         }
         
         if (eTipo && typeof eTipo === 'string' && eTipo.startsWith('gol-')) {
@@ -1440,6 +1464,12 @@ async function abrirEstadisticas(par) {
         const eTipoStr = (eTipo || '').toLowerCase();
         const accNomStr = (accNombre || '').toLowerCase();
 
+        if (eTipoStr === 'corner-favor' || eTipoStr === 'corner') {
+            cornersFavor++;
+        } else if (eTipoStr === 'corner-contra' || eTipoStr === 'corner-rival') {
+            cornersContra++;
+        }
+
         if (eTipo === 'asistencia') {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].asis++;
         }
@@ -1455,10 +1485,10 @@ async function abrirEstadisticas(par) {
         if (eTipoStr === 'falta-cometida' || accNomStr.includes('falta cometida')) {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].faltasCometidas++;
         }
-        if (eTipoStr === 'amarilla' || eTipoStr === 'tarjeta-amarilla' || accNomStr.includes('amarilla')) {
+        if ((eTipoStr === 'amarilla' || eTipoStr === 'tarjeta-amarilla' || accNomStr.includes('amarilla')) && !eTipoStr.includes('rival') && !accNomStr.includes('rival') && !ef.rival) {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].amarillas++;
         }
-        if (eTipoStr === 'roja' || eTipoStr === 'tarjeta-roja' || accNomStr.includes('roja')) {
+        if ((eTipoStr === 'roja' || eTipoStr === 'tarjeta-roja' || accNomStr.includes('roja')) && !eTipoStr.includes('rival') && !accNomStr.includes('rival') && !ef.rival) {
             if (ef.jugadorId && statsJugadores[ef.jugadorId]) statsJugadores[ef.jugadorId].rojas++;
         }
         
@@ -1513,29 +1543,40 @@ async function abrirEstadisticas(par) {
         eqIzdaNombre,
         eqDchaEscudo,
         eqDchaNombre,
+        miEquipoNombre: nomLocal,
         fechaHora,
         headerHtml,
         golesMios,
         golesRival,
+        cornersFavor,
+        cornersContra,
         totalAcciones,
         positivas,
         minFinal
     };
 
-    document.getElementById('stats-global-container').innerHTML = `
-        <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
-            <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">Resultado Final</h5>
-            <div class="text-3xl font-black text-slate-800">${par.resultado || (golesMios + ' - ' + golesRival)}</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
-            <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">Tot. Acciones</h5>
-            <div class="text-3xl font-black text-blue-500">${totalAcciones}</div>
-        </div>
-        <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
-            <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">% Acciones Pos.</h5>
-            <div class="text-3xl font-black text-purple-500">${totalAcciones > 0 ? Math.round((positivas/totalAcciones)*100) : 0}%</div>
-        </div>
-    `;
+    const statsGlobalEl = document.getElementById('stats-global-container');
+    if (statsGlobalEl) {
+        statsGlobalEl.className = 'grid grid-cols-2 sm:grid-cols-4 gap-4';
+        statsGlobalEl.innerHTML = `
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">Resultado Final</h5>
+                <div class="text-3xl font-black text-slate-800">${par.resultado || (golesMios + ' - ' + golesRival)}</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <h5 class="text-slate-500 text-xs uppercase font-bold mb-1" title="Córners a favor - Córners en contra"><i class="fa-solid fa-flag text-emerald-500 mr-1"></i>Córners (F / C)</h5>
+                <div class="text-3xl font-black text-emerald-600">${cornersFavor} <span class="text-slate-300 font-bold text-xl">-</span> <span class="text-amber-600">${cornersContra}</span></div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">Tot. Acciones</h5>
+                <div class="text-3xl font-black text-blue-500">${totalAcciones}</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm text-center">
+                <h5 class="text-slate-500 text-xs uppercase font-bold mb-1">% Acciones Pos.</h5>
+                <div class="text-3xl font-black text-purple-500">${totalAcciones > 0 ? Math.round((positivas/totalAcciones)*100) : 0}%</div>
+            </div>
+        `;
+    }
 
     const validPlayerIds = Object.keys(statsJugadores).filter(id => id && id !== 'undefined' && id !== 'null');
 
@@ -1658,7 +1699,7 @@ async function abrirEstadisticas(par) {
 
         const tlHTML = sortedEfems.map(ef => {
              const eTipo = ef.tipo || ef.accionId;
-             const acc = configAcc.find(a => a.id === eTipo);
+             const acc = configAcc.find(a => a.id === eTipo) || configRivalStats.find(a => a.id === eTipo);
              const icon = ef.icon || (acc ? acc.icon : 'fa-bolt');
              const cl = ef.color || (acc ? acc.color : 'text-slate-500');
              const text = ef.nombre || (acc ? acc.nombre : eTipo);
@@ -1667,10 +1708,17 @@ async function abrirEstadisticas(par) {
              const minText = formatearTiempoAnotado(tInfo.min, tInfo.sec);
              const periodoBadge = ef.periodo ? `<span class="text-[10px] font-semibold text-slate-400 ml-1.5 uppercase tracking-wider">(${ef.periodo})</span>` : '';
              
-             let subText = ef.jugadorNombre || '';
-             if (!subText) {
+             let subText = (ef.jugadorNombre && ef.jugadorNombre !== 'undefined') ? ef.jugadorNombre : '';
+             if (!subText && ef.jugadorId) {
                  const jug = todosLosJugadores.find(j => j.id === ef.jugadorId);
                  subText = jug ? jug.nombre : '';
+             }
+             if (!subText) {
+                 if (ef.esPropio || ef.ambito === 'propio' || eTipo === 'corner-favor') {
+                     subText = nomLocal;
+                 } else if (ef.rival || eTipo === 'corner-contra' || (typeof eTipo === 'string' && eTipo.includes('rival'))) {
+                     subText = nomRival;
+                 }
              }
              
              if (ef.jugadorEntraId || ef.jugadorEntraNombre) {
@@ -1758,7 +1806,8 @@ async function abrirEstadisticas(par) {
     
     // Generate share text
     let stText = `📊 ESTADÍSTICAS DEL PARTIDO\n`;
-    stText += `Resultado: ${golesMios} - ${golesRival}\n\n`;
+    stText += `Resultado: ${golesMios} - ${golesRival}\n`;
+    stText += `Córners (Favor - Contra): ${cornersFavor} - ${cornersContra}\n\n`;
     stText += `Jugadores destacados:\n`;
     Object.keys(statsJugadores).forEach(id => {
         const jug = todosLosJugadores.find(j => j.id === id);
@@ -1919,7 +1968,7 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
     const inputNota = document.getElementById('input-accion-nota');
 
     const configAcc = par.configAcciones || DEFAULT_ACCIONES;
-    const configRival = par.configAccionesRival || DEFAULT_ACCIONES_RIVAL;
+    const configRival = asegurarCornersEnLista(par.configAccionesRival || DEFAULT_ACCIONES_RIVAL);
 
     const eqId = par.equipoId || equipoIdActivo;
     const jugadoresEquipo = todosLosJugadores.filter(j => j.equipoId === eqId);
@@ -1939,8 +1988,10 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
     let ambitoEquipo = 'mio';
 
     if (efemeride) {
-        const eTipo = efemeride.tipo || efemeride.accionId || '';
-        if (eTipo.includes('rival') || (!efemeride.jugadorId && !efemeride.jugadorNombre)) {
+        const eTipo = (efemeride.tipo || efemeride.accionId || '').toLowerCase();
+        if (eTipo === 'corner-favor' || efemeride.esPropio || efemeride.ambito === 'propio') {
+            ambitoEquipo = 'mio';
+        } else if (eTipo.includes('rival') || eTipo === 'corner-contra' || efemeride.rival || (!efemeride.jugadorId && !efemeride.jugadorNombre)) {
             ambitoEquipo = 'rival';
         } else {
             ambitoEquipo = 'mio';
@@ -1954,7 +2005,12 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             containerJugPrincipal.classList.remove('hidden');
             containerJugRival.classList.add('hidden');
 
-            selectTipo.innerHTML = configAcc.filter(a => a.isActive !== false).map(a => `
+            let propiasOpts = configAcc.filter(a => a.isActive !== false);
+            if (!propiasOpts.some(a => a.id === 'corner-favor')) {
+                propiasOpts = [...propiasOpts, { id: 'corner-favor', nombre: 'Córner a favor' }];
+            }
+
+            selectTipo.innerHTML = propiasOpts.map(a => `
                 <option value="${a.id}">${a.nombre}</option>
             `).join('');
         } else {
@@ -1963,14 +2019,15 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             containerJugPrincipal.classList.add('hidden');
             containerJugRival.classList.remove('hidden');
 
-            const rivalIds = configRival.map(r => r.id);
-            let combinedRival = [...configRival];
+            let combinedRival = configRival.filter(r => !r.esPropio && r.id !== 'corner-favor');
+            const rivalIds = combinedRival.map(r => r.id);
             [
                 { id: 'gol-rival', nombre: 'Gol Rival' },
                 { id: 'tiro-rival', nombre: 'Tiro Rival' },
+                { id: 'corner-contra', nombre: 'Córner en contra' },
                 { id: 'falta-rival', nombre: 'Falta Rival' },
-                { id: 'amarilla-rival', nombre: 'Tarjeta Amarilla Rival' },
-                { id: 'roja-rival', nombre: 'Tarjeta Roja Rival' }
+                { id: 'amarilla-rival', nombre: 'Amarilla rival' },
+                { id: 'roja-rival', nombre: 'Roja rival' }
             ].forEach(defR => {
                 if (!rivalIds.includes(defR.id)) combinedRival.push(defR);
             });
@@ -1986,6 +2043,7 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
         const t = selectTipo.value;
         const isSust = (t === 'sustitucion' || t === 'sustitucion-lesion');
         const isGolMio = ambitoEquipo === 'mio' && typeof t === 'string' && t.startsWith('gol-') && t !== 'gol-rival';
+        const isCornerEquipo = ambitoEquipo === 'mio' && (t === 'corner-favor' || t === 'corner');
 
         if (ambitoEquipo === 'mio') {
             if (isSust) {
@@ -1994,6 +2052,13 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
             } else {
                 containerSustitucion.classList.add('hidden');
                 containerJugPrincipal.classList.remove('hidden');
+                const currentSelJug = selectJugador.value;
+                populateJugadoresSelect(
+                    selectJugador,
+                    currentSelJug,
+                    isCornerEquipo,
+                    '-- Equipo (Sin jugador específico) --'
+                );
             }
 
             if (isGolMio) {
@@ -2166,14 +2231,21 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
                 eData.jugadorEntraDorsal = jEntra?.dorsal || '';
             } else {
                 const jId = selectJugador.value;
-                if (!jId) return alert("Selecciona un jugador.");
-                const jInfo = todosLosJugadores.find(j => j.id === jId);
-                eData.jugadorId = jId;
-                eData.jugadorNombre = jInfo?.nombre || '';
-                eData.jugadorDorsal = jInfo?.dorsal || '';
+                const permiteSinJugador = (tipoId === 'corner-favor' || tipoId === 'corner');
+                if (!jId && !permiteSinJugador) return alert("Selecciona un jugador.");
+                if (jId) {
+                    const jInfo = todosLosJugadores.find(j => j.id === jId);
+                    eData.jugadorId = jId;
+                    eData.jugadorNombre = jInfo?.nombre || '';
+                    eData.jugadorDorsal = jInfo?.dorsal || '';
+                } else {
+                    eData.ambito = 'propio';
+                    eData.esPropio = true;
+                    eData.rival = false;
+                }
 
                 if (accDef.isPositive !== undefined) eData.isPositive = accDef.isPositive;
-                if (accDef.score !== undefined) eData.score = accDef.score;
+                if (accDef.score !== undefined && jId) eData.score = accDef.score;
 
                 const asisId = selectAsistente.value;
                 if (asisId && typeof tipoId === 'string' && tipoId.startsWith('gol-')) {
@@ -2183,12 +2255,15 @@ export function abrirModalAccionPartido(par, efemeride = null, onSaved = null) {
                 }
             }
         } else {
+            eData.ambito = 'rival';
+            eData.esPropio = false;
+            eData.rival = true;
             const nomRivalJug = inputJugRival.value.trim();
             if (nomRivalJug) {
                 eData.jugadorNombre = nomRivalJug;
                 eData.jugadorRival = nomRivalJug;
             } else {
-                eData.jugadorNombre = 'Rival';
+                eData.jugadorNombre = par.rival || 'Rival';
             }
         }
 
@@ -2390,7 +2465,7 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                     categoriaGrafico = "Falta cometida";
                 } else if (eTipo === 'falta-recibida' || accNombre.includes('falta recibida')) {
                     categoriaGrafico = "Falta recibida";
-                } else if (eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNombre.includes('amarilla')) {
+                } else if ((eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNombre.includes('amarilla')) && !eTipo.includes('rival') && !accNombre.includes('rival') && !data.rival) {
                     categoriaGrafico = "T. Amarillas";
                 }
 
@@ -2433,9 +2508,9 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                         sg.tPuerta++;
                     } else if (eTipo === 'tiro-fuera' || nomStr.includes('tiro fuera')) {
                         sg.tFuera++;
-                    } else if (eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || nomStr.includes('amarilla')) {
+                    } else if ((eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || nomStr.includes('amarilla')) && !eTipo.includes('rival') && !nomStr.includes('rival') && !data.rival) {
                         sg.amarillas++;
-                    } else if (eTipo === 'roja' || eTipo === 'tarjeta-roja' || nomStr.includes('roja')) {
+                    } else if ((eTipo === 'roja' || eTipo === 'tarjeta-roja' || nomStr.includes('roja')) && !eTipo.includes('rival') && !nomStr.includes('rival') && !data.rival) {
                         sg.rojas++;
                     }
 

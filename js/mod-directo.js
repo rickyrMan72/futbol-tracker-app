@@ -139,8 +139,42 @@ export const DEFAULT_ACCIONES = [
 export const DEFAULT_ACCIONES_RIVAL = [
     { id: 'gol-rival', nombre: 'Gol Rival', icon: 'fa-futbol', color: 'text-slate-500', modulo: 'Defensa' },
     { id: 'tiro-rival', nombre: 'Tiro Rival', icon: 'fa-xmark', color: 'text-slate-500', modulo: 'Defensa' },
-    { id: 'roja-rival', nombre: 'Roja Rival', icon: 'fa-square', color: 'text-red-500', modulo: 'General' }
+    { id: 'corner-favor', nombre: 'Córner a favor', icon: 'fa-flag', color: 'text-emerald-500', modulo: 'Ataque', esPropio: true, isPositive: true },
+    { id: 'corner-contra', nombre: 'Córner en contra', icon: 'fa-flag', color: 'text-amber-500', modulo: 'Defensa' },
+    { id: 'amarilla-rival', nombre: 'Amarilla rival', icon: 'fa-square', color: 'text-yellow-400', modulo: 'General' },
+    { id: 'roja-rival', nombre: 'Roja rival', icon: 'fa-square', color: 'text-red-500', modulo: 'General' }
 ];
+
+const NOMBRES_ANTIGUOS_BARRA = {
+    'corner-favor': ['Córner Favor', 'Corner Favor', 'Cóner a favor'],
+    'corner-contra': ['Córner Contra', 'Corner Contra', 'Cóner en contra'],
+    'amarilla-rival': ['Amarilla Rival', 'Tarjeta Amarilla Rival'],
+    'roja-rival': ['Roja Rival', 'Tarjeta Roja Rival']
+};
+
+export function asegurarCornersEnLista(lista = []) {
+    const copia = Array.isArray(lista) ? JSON.parse(JSON.stringify(lista)) : [];
+    const standardIds = new Set(DEFAULT_ACCIONES_RIVAL.map(d => d.id));
+
+    const normalizados = DEFAULT_ACCIONES_RIVAL.map(def => {
+        const existente = copia.find(a => a.id === def.id);
+        if (!existente) {
+            return JSON.parse(JSON.stringify(def));
+        }
+        const item = { ...def, ...existente };
+        if (NOMBRES_ANTIGUOS_BARRA[def.id]?.includes(item.nombre)) {
+            item.nombre = def.nombre;
+        }
+        if (def.id === 'corner-favor') {
+            item.esPropio = true;
+            item.isPositive = true;
+        }
+        return item;
+    });
+
+    const personalizados = copia.filter(a => a && a.id && !standardIds.has(a.id));
+    return [...normalizados, ...personalizados];
+}
 
 export function getAccionesPartido() {
     if (partidoObj && partidoObj.configAcciones) {
@@ -151,9 +185,9 @@ export function getAccionesPartido() {
 
 export function getAccionesRivalPartido() {
     if (partidoObj && partidoObj.configAccionesRival) {
-        return partidoObj.configAccionesRival;
+        return asegurarCornersEnLista(partidoObj.configAccionesRival);
     }
-    return getGlobalAccionesRival();
+    return asegurarCornersEnLista(getGlobalAccionesRival());
 }
 
 export function initDirecto() {
@@ -197,9 +231,11 @@ export function initDirecto() {
             const accionObj = getAccionesRivalPartido().find(a => a.id === accionId);
             if (!accionObj || !partidoIdActivo) return;
 
+            const esAccionPropia = Boolean(accionObj.esPropio || accionObj.id === 'corner-favor');
             let shouldAdd = true;
             if (accionObj.id.includes('gol') || accionObj.id.includes('roja')) {
-                shouldAdd = await confirmarAccion(`¿Añadir "${accionObj.nombre}" al rival?`, "Añadir", accionObj.color.replace('text-', 'text-') || "text-rose-600");
+                const destinoTxt = esAccionPropia ? 'a nuestro equipo' : 'al rival';
+                shouldAdd = await confirmarAccion(`¿Añadir "${accionObj.nombre}" ${destinoTxt}?`, "Añadir", accionObj.color || "text-rose-600");
             }
 
             if (shouldAdd) {
@@ -209,7 +245,7 @@ export function initDirecto() {
                 const sec = totalSecs % 60;
                 const tiempoStr = formatoCrono(msActuales);
                 try {
-                    await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), {
+                    const payload = {
                         tipo: accionObj.id,
                         nombre: accionObj.nombre,
                         icon: accionObj.icon,
@@ -220,11 +256,18 @@ export function initDirecto() {
                         minutoMs: msActuales,
                         periodo: partidoObj?.cronometro?.periodo || '1ª Parte',
                         timestamp: Date.now(),
-                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon'
-                    });
+                        creadoPor: auth.currentUser ? auth.currentUser.uid : 'anon',
+                        ambito: esAccionPropia ? 'propio' : 'rival',
+                        esPropio: esAccionPropia,
+                        rival: !esAccionPropia
+                    };
+                    if (accionObj.isPositive !== undefined) {
+                        payload.isPositive = accionObj.isPositive;
+                    }
+                    await addDoc(collection(db, 'partidos', partidoIdActivo, 'efemerides'), payload);
                     mostrarNotificacion(`${accionObj.nombre} registrado`);
                 } catch (err) {
-                    console.error("Error saving rival action:", err);
+                    console.error("Error saving quick action:", err);
                     mostrarNotificacion("Error al registrar acción", true);
                 }
             }
@@ -419,6 +462,7 @@ function abrirDirecto(id) {
             efemeridesList.sort(compararEfemeridesDesc); // Mas recientes en el partido primero
             efemeridesCargadas = true;
             renderEfemerides();
+            renderAccionesRival();
             sincronizarTitularesEnCampo();
             renderJugadoresEnCampo();
         }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
@@ -660,16 +704,20 @@ function updateCronoUI() {
     const isFinalizado = c.periodo === 'Finalizado' || isPast;
     const campoContainer = document.getElementById('directo-jugadores-list');
 
+    const rivalContainer = document.getElementById('directo-acciones-rival-list');
+
     if (isFinalizado) {
         btnStart.classList.add('hidden');
         btnPause.classList.add('hidden');
         btnNext.classList.add('hidden');
         campoContainer.classList.add('pointer-events-none', 'opacity-70');
         document.getElementById('directo-acciones-list').classList.add('opacity-50', 'pointer-events-none');
+        if (rivalContainer) rivalContainer.classList.add('opacity-50', 'pointer-events-none');
         document.getElementById('directo-cronometro').classList.remove('text-emerald-400');
     } else {
         btnNext.classList.remove('hidden');
         campoContainer.classList.remove('pointer-events-none', 'opacity-70');
+        if (rivalContainer) rivalContainer.classList.remove('opacity-50', 'pointer-events-none');
 
         // Actualizar dinámicamente texto, icono, título y estilo del botón de periodo
         const periodoActual = c.periodo || '1ª Parte';
@@ -830,6 +878,12 @@ function abrirModalConfigAcciones() {
     if (!partidoObj.configAccionesRival) {
         partidoObj.configAccionesRival = getGlobalAccionesRival();
         needsUpdate = true;
+    } else {
+        const migrada = asegurarCornersEnLista(partidoObj.configAccionesRival);
+        if (JSON.stringify(migrada) !== JSON.stringify(partidoObj.configAccionesRival)) {
+            partidoObj.configAccionesRival = migrada;
+            needsUpdate = true;
+        }
     }
 
     if (needsUpdate) {
@@ -1118,18 +1172,51 @@ function renderAcciones() {
     });
 }
 
+function contarAccionBarraDirecto(accionId) {
+    if (!Array.isArray(efemeridesList) || efemeridesList.length === 0) return 0;
+    return efemeridesList.reduce((acc, ef) => {
+        const t = (ef.tipo || ef.accionId || '').toLowerCase();
+        if (accionId === 'corner-favor') {
+            return (t === 'corner-favor' || t === 'corner') ? acc + 1 : acc;
+        }
+        if (accionId === 'corner-contra') {
+            return (t === 'corner-contra' || t === 'corner-rival') ? acc + 1 : acc;
+        }
+        return t === accionId.toLowerCase() ? acc + 1 : acc;
+    }, 0);
+}
+
 function renderAccionesRival() {
     const container = document.getElementById('directo-acciones-rival-list');
     if (!container) return;
+    container.className = 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 shrink-0 mb-2';
     const list = getAccionesRivalPartido().filter(acc => acc.isActive !== false);
     container.innerHTML = list.map(acc => {
+        const count = contarAccionBarraDirecto(acc.id);
         let btnCls = 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700';
-        if (acc.color && acc.color.includes('red')) btnCls = 'bg-red-50 border-red-200 hover:bg-red-100 text-red-600';
+        let badgeCls = 'bg-slate-100 text-slate-700';
+
+        if (acc.id === 'corner-favor' || acc.esPropio) {
+            btnCls = 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-800';
+            badgeCls = 'bg-emerald-200/80 text-emerald-900';
+        } else if (acc.id === 'corner-contra') {
+            btnCls = 'bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-800';
+            badgeCls = 'bg-orange-200/80 text-orange-900';
+        } else if (acc.id === 'amarilla-rival' || (acc.color && acc.color.includes('yellow'))) {
+            btnCls = 'bg-yellow-50 border-yellow-300 hover:bg-yellow-100 text-yellow-800';
+            badgeCls = 'bg-yellow-200/80 text-yellow-900';
+        } else if (acc.id === 'roja-rival' || (acc.color && acc.color.includes('red'))) {
+            btnCls = 'bg-red-50 border-red-200 hover:bg-red-100 text-red-700';
+            badgeCls = 'bg-red-200/80 text-red-800';
+        }
 
         return `
-            <button class="btn-add-accion-rival flex-1 min-w-[100px] border rounded-lg px-2 sm:px-3 py-1.5 flex items-center justify-center transition-colors shadow-sm gap-2 ${btnCls}" data-id="${acc.id}">
-                <i class="fa-solid ${acc.icon} ${acc.color} text-sm"></i>
-                <span class="text-[11px] sm:text-xs font-bold font-sans whitespace-nowrap">${acc.nombre}</span>
+            <button class="btn-add-accion-rival w-full border rounded-lg px-2 sm:px-2.5 py-1.5 flex items-center justify-between sm:justify-center transition-colors shadow-sm gap-1.5 ${btnCls}" data-id="${acc.id}">
+                <span class="flex items-center gap-1.5 min-w-0 truncate">
+                    <i class="fa-solid ${acc.icon} ${acc.color} text-xs sm:text-sm shrink-0"></i>
+                    <span class="text-[11px] sm:text-xs font-bold font-sans truncate">${acc.nombre}</span>
+                </span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold leading-none shrink-0 ${badgeCls}" title="Total acumulado en el partido">${count}</span>
             </button>
         `;
     }).join('');
@@ -1360,12 +1447,24 @@ function renderEfemerides() {
         return;
     }
 
+    const miEquipoNom = todosLosEquipos.find(eq => eq.id === partidoObj?.equipoId)?.nombre || 'Mi Equipo';
+    const rivalNom = partidoObj?.rival || 'Rival';
+
     container.innerHTML = efemeridesList.map(e => {
         const isSust = (e.tipo === 'sustitucion' || e.tipo === 'sustitucion-lesion');
-        
-        let desc = `<span class="font-bold text-slate-800">#${e.jugadorDorsal} ${e.jugadorNombre}</span>`;
-        if (isSust) {
-            desc += ` <i class="fa-solid fa-arrow-right-long text-slate-400 mx-2"></i> <span class="font-bold text-slate-800">#${e.jugadorEntraDorsal} ${e.jugadorEntraNombre}</span>`;
+        const tieneJugador = Boolean(e.jugadorId || (e.jugadorNombre && e.jugadorNombre !== 'undefined'));
+
+        let desc = '';
+        if (tieneJugador) {
+            const dorsalTxt = (e.jugadorDorsal !== undefined && e.jugadorDorsal !== null && e.jugadorDorsal !== '' && e.jugadorDorsal !== 'undefined') ? `#${e.jugadorDorsal} ` : '';
+            desc = `<span class="font-bold text-slate-800">${dorsalTxt}${e.jugadorNombre || ''}</span>`;
+            if (isSust) {
+                desc += ` <i class="fa-solid fa-arrow-right-long text-slate-400 mx-2"></i> <span class="font-bold text-slate-800">#${e.jugadorEntraDorsal ?? ''} ${e.jugadorEntraNombre || ''}</span>`;
+            }
+        } else if (e.esPropio || e.ambito === 'propio' || e.tipo === 'corner-favor') {
+            desc = `<span class="font-semibold text-emerald-700">${miEquipoNom}</span>`;
+        } else {
+            desc = `<span class="font-semibold text-rose-600">${rivalNom}</span>`;
         }
 
         const tInfo = extraerTiempoEfemeride(e);
