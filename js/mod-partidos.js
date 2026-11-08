@@ -2449,13 +2449,15 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
 
                 // Clasificar en las categorías solicitadas para el gráfico
                 let categoriaGrafico = null;
+                const esRival = Boolean(data.rival || data.ambito === 'rival' || eTipo.includes('rival') || accNombre.includes('rival'));
+                const esGol = (eTipo.startsWith('gol-') || eTipo === 'gol' || accNombre.startsWith('gol')) && !accNombre.includes('parada');
 
                 if (eTipo === 'asistencia' || accNombre.includes('asistencia')) {
                     categoriaGrafico = "Asistencias";
-                } else if (eTipo === 'gol-rival' || accNombre.includes('gol rival')) {
+                } else if (esGol && esRival) {
                     categoriaGrafico = "Gol rival";
-                } else if (eTipo.startsWith('gol-') || accNombre.includes('gol')) {
-                    // Goles propios (pie, cabeza, falta, olímpico, etc.)
+                } else if (esGol && !esRival) {
+                    // Goles propios (pie, cabeza, falta, olímpico, etc., que empiecen por "Gol" y no sean del rival)
                     categoriaGrafico = "Goles propios";
                 } else if (eTipo === 'tiro-puerta' || eTipo === 'tiro-fuera' || accNombre.includes('tiro a puerta') || accNombre.includes('tiro fuera')) {
                     categoriaGrafico = "Tiros Propios";
@@ -2465,7 +2467,7 @@ export async function actualizarEstadisticasDashboard(partidos, ahora = new Date
                     categoriaGrafico = "Falta cometida";
                 } else if (eTipo === 'falta-recibida' || accNombre.includes('falta recibida')) {
                     categoriaGrafico = "Falta recibida";
-                } else if ((eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNombre.includes('amarilla')) && !eTipo.includes('rival') && !accNombre.includes('rival') && !data.rival) {
+                } else if ((eTipo === 'amarilla' || eTipo === 'tarjeta-amarilla' || accNombre.includes('amarilla')) && !esRival) {
                     categoriaGrafico = "T. Amarillas";
                 }
 
@@ -2906,7 +2908,7 @@ export async function obtenerEstadisticasJugador(jugadorId, eqId = null) {
 
                 if (eTipo.startsWith('gol-') && eTipo !== 'gol-rival') {
                     golesP++;
-                } else if (!eTipo.includes('rival') && accNom.includes('gol') && !accNom.includes('parada')) {
+                } else if (!eTipo.includes('rival') && accNom.startsWith('gol') && !accNom.includes('parada')) {
                     golesP++;
                 }
 
