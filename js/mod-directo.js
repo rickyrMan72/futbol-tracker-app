@@ -632,6 +632,12 @@ async function avanzarPeriodo() {
         nuevoTiempoAcu += (ahora - c.ultimoInicioTimer);
     }
 
+    // Al pasar al segundo tiempo, el marcador se resetea a los minutos de inicio de la 2ª parte (40 min por defecto o configurable)
+    if (periodoActual === '1ª Parte' && nextPeriodo === '2ª Parte') {
+        const duracionParteMin = parseInt(partidoObj.minutosParte || partidoObj.duracionParte || 40, 10);
+        nuevoTiempoAcu = duracionParteMin * 60 * 1000;
+    }
+
     // Actualización inmediata local en la UI para feedback instantáneo
     partidoObj.cronometro.estado = 'pausado';
     partidoObj.cronometro.ultimoInicioTimer = 0;
@@ -916,15 +922,46 @@ function renderListaConfigAcciones() {
         return map;
     }, {});
 
+    async function reordenarAccionesPartido(fromIdx, toIdx) {
+        if (fromIdx === toIdx || isNaN(fromIdx) || isNaN(toIdx)) return;
+        const isPropias = currentMatchTab === 'propias';
+        const currentList = isPropias ? [...(partidoObj.configAcciones || getAccionesPartido())] : [...(partidoObj.configAccionesRival || getAccionesRivalPartido())];
+        if (fromIdx < 0 || toIdx < 0 || fromIdx >= currentList.length || toIdx >= currentList.length) return;
+
+        const [draggedItem] = currentList.splice(fromIdx, 1);
+        currentList.splice(toIdx, 0, draggedItem);
+
+        if (isPropias) {
+            partidoObj.configAcciones = currentList;
+            await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: currentList });
+        } else {
+            partidoObj.configAccionesRival = currentList;
+            await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAccionesRival: currentList });
+        }
+        renderListaConfigAcciones();
+    }
+
     container.innerHTML = list.map((acc, index) => {
         const isActive = acc.isActive !== false; // true by default
         const mod = acc.modulo || defaultModuloMap[acc.id] || 'General';
 
         return `
-            <div class="draggable-accion flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 ${isActive ? 'opacity-100' : 'opacity-50'}" draggable="true" data-id="${acc.id}" data-index="${index}">
-                <div class="flex items-center gap-2 flex-1 min-w-0">
-                    <i class="fa-solid fa-grip-vertical text-slate-300 hover:text-slate-500 cursor-grab px-1" title="Arrastrar para reordenar"></i>
-                    <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
+            <div class="draggable-accion flex items-center justify-between p-2 sm:p-3 border rounded-lg bg-white shadow-sm gap-2 transition-all ${isActive ? 'opacity-100' : 'opacity-50'}" draggable="true" data-id="${acc.id}" data-index="${index}">
+                <div class="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
+                    <div class="flex items-center gap-0.5 shrink-0">
+                        <div class="drag-handle touch-none select-none p-1.5 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 rounded" title="Arrastrar para reordenar">
+                            <i class="fa-solid fa-grip-vertical text-sm"></i>
+                        </div>
+                        <div class="flex flex-col">
+                            <button type="button" class="btn-move-accion-up w-5 h-3.5 flex items-center justify-center rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 text-[10px] ${index === 0 ? 'opacity-20 pointer-events-none' : ''}" data-index="${index}" title="Subir posición">
+                                <i class="fa-solid fa-chevron-up"></i>
+                            </button>
+                            <button type="button" class="btn-move-accion-down w-5 h-3.5 flex items-center justify-center rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 text-[10px] ${index === list.length - 1 ? 'opacity-20 pointer-events-none' : ''}" data-index="${index}" title="Bajar posición">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="checkbox" class="chk-active-accion w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer shrink-0" data-id="${acc.id}" ${isActive ? 'checked' : ''} title="Mostrar en el partido">
                     <i class="fa-solid ${acc.icon} ${acc.color} w-6 text-center text-lg shrink-0"></i>
                     <span class="font-medium text-slate-700 truncate ${isActive ? '' : 'line-through'}">${acc.nombre} ${acc.score !== undefined ? `<span class="text-xs text-slate-500 font-normal ml-1">(${acc.score} pt)</span>` : ''} ${acc.isChange ? '<span class="text-xs bg-amber-100 text-amber-700 px-1 rounded ml-1">[S]</span>' : ''} ${mod !== 'General' ? `<span class="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded ml-1 border border-blue-100">${mod}</span>` : ''}</span>
                 </div>
@@ -936,13 +973,105 @@ function renderListaConfigAcciones() {
         `;
     }).join('');
 
+    // Reordenar mediante botones táctiles (Subir / Bajar)
+    container.querySelectorAll('.btn-move-accion-up').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.getAttribute('data-index'), 10);
+            if (idx > 0) {
+                reordenarAccionesPartido(idx, idx - 1);
+            }
+        });
+    });
+
+    container.querySelectorAll('.btn-move-accion-down').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const idx = parseInt(btn.getAttribute('data-index'), 10);
+            if (idx < list.length - 1) {
+                reordenarAccionesPartido(idx, idx + 1);
+            }
+        });
+    });
+
+    // Reordenar mediante touch (táctil para Tablets / Móviles)
+    let touchSourceItem = null;
+    let touchSourceIdx = null;
+    let currentHoverTarget = null;
+
+    container.querySelectorAll('.drag-handle').forEach(handle => {
+        handle.addEventListener('touchstart', (e) => {
+            const item = handle.closest('.draggable-accion');
+            if (!item) return;
+            touchSourceItem = item;
+            touchSourceIdx = parseInt(item.getAttribute('data-index'), 10);
+            item.classList.add('opacity-40', 'ring-2', 'ring-blue-500', 'bg-blue-50');
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', (e) => {
+            if (!touchSourceItem) return;
+            if (e.cancelable) e.preventDefault();
+            const touch = e.touches[0];
+            const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+            const targetItem = elem ? elem.closest('.draggable-accion') : null;
+
+            container.querySelectorAll('.draggable-accion').forEach(el => {
+                el.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            });
+
+            if (targetItem && targetItem !== touchSourceItem) {
+                currentHoverTarget = targetItem;
+                const targetIdx = parseInt(targetItem.getAttribute('data-index'), 10);
+                if (targetIdx > touchSourceIdx) {
+                    targetItem.classList.add('border-b-2', 'border-b-blue-500');
+                } else {
+                    targetItem.classList.add('border-t-2', 'border-t-blue-500');
+                }
+            } else {
+                currentHoverTarget = null;
+            }
+        }, { passive: false });
+
+        handle.addEventListener('touchend', async () => {
+            if (touchSourceItem) {
+                touchSourceItem.classList.remove('opacity-40', 'ring-2', 'ring-blue-500', 'bg-blue-50');
+            }
+            container.querySelectorAll('.draggable-accion').forEach(el => {
+                el.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            });
+
+            if (touchSourceItem && currentHoverTarget && currentHoverTarget !== touchSourceItem) {
+                const targetIdx = parseInt(currentHoverTarget.getAttribute('data-index'), 10);
+                if (!isNaN(touchSourceIdx) && !isNaN(targetIdx) && touchSourceIdx !== targetIdx) {
+                    await reordenarAccionesPartido(touchSourceIdx, targetIdx);
+                }
+            }
+
+            touchSourceItem = null;
+            touchSourceIdx = null;
+            currentHoverTarget = null;
+        });
+
+        handle.addEventListener('touchcancel', () => {
+            if (touchSourceItem) {
+                touchSourceItem.classList.remove('opacity-40', 'ring-2', 'ring-blue-500', 'bg-blue-50');
+            }
+            container.querySelectorAll('.draggable-accion').forEach(el => {
+                el.classList.remove('border-b-2', 'border-b-blue-500', 'border-t-2', 'border-t-blue-500');
+            });
+            touchSourceItem = null;
+            touchSourceIdx = null;
+            currentHoverTarget = null;
+        });
+    });
+
+    // Reordenar mediante Drag and Drop de escritorio (HTML5)
     let draggedItemIdx = null;
 
     container.querySelectorAll('.draggable-accion').forEach(item => {
         item.addEventListener('dragstart', (e) => {
-            draggedItemIdx = parseInt(item.getAttribute('data-index'));
+            draggedItemIdx = parseInt(item.getAttribute('data-index'), 10);
             e.dataTransfer.effectAllowed = 'move';
-            // Wait for next tick to add class so it doesn't immediately hide the dragged ghost
             setTimeout(() => item.classList.add('opacity-40', 'border-dashed', 'border-slate-400'), 0);
         });
 
@@ -952,8 +1081,7 @@ function renderListaConfigAcciones() {
             
             const targetItem = e.target.closest('.draggable-accion');
             if (targetItem && targetItem !== item) {
-                // Add a border to indicate drop position
-                const targetIdx = parseInt(targetItem.getAttribute('data-index'));
+                const targetIdx = parseInt(targetItem.getAttribute('data-index'), 10);
                 if (targetIdx > draggedItemIdx) {
                     targetItem.classList.add('border-b-2', 'border-b-blue-500');
                     targetItem.classList.remove('border-t-2', 'border-t-blue-500');
@@ -979,20 +1107,9 @@ function renderListaConfigAcciones() {
             }
             
             if (targetItem && draggedItemIdx !== null) {
-                const targetIdx = parseInt(targetItem.getAttribute('data-index'));
+                const targetIdx = parseInt(targetItem.getAttribute('data-index'), 10);
                 if (draggedItemIdx !== targetIdx) {
-                    const newList = currentMatchTab === 'propias' ? [...partidoObj.configAcciones] : [...partidoObj.configAccionesRival];
-                    const [draggedItem] = newList.splice(draggedItemIdx, 1);
-                    newList.splice(targetIdx, 0, draggedItem);
-                    
-                    if (currentMatchTab === 'propias') {
-                        partidoObj.configAcciones = newList;
-                        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAcciones: newList });
-                    } else {
-                        partidoObj.configAccionesRival = newList;
-                        await updateDoc(doc(db, 'partidos', partidoIdActivo), { configAccionesRival: newList });
-                    }
-                    renderListaConfigAcciones();
+                    await reordenarAccionesPartido(draggedItemIdx, targetIdx);
                 }
             }
         });
