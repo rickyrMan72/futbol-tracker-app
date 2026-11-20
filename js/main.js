@@ -7,6 +7,7 @@ import { initSesiones } from './mod-sesiones.js';
 import { initPartidos } from './mod-partidos.js';
 import { initDirecto } from './mod-directo.js';
 import { initPizarra } from './mod-pizarra.js';
+import { initEstadisticas } from './mod-estadisticas.js';
 import { initConfiguracion } from './mod-configuracion.js';
 import { initColaboradores } from './mod-colaboradores.js';
 import { exportarDatos, importarDatos } from './backup.js';
@@ -113,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
             initPartidos();
             initDirecto();
             initPizarra();
+            initEstadisticas();
             initConfiguracion();
             initColaboradores();
             appInitialized = true;

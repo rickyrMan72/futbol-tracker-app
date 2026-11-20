@@ -3,7 +3,7 @@ import { mostrarNotificacion, bindModal, confirmarAccion } from './ui.js';
 import { todosLosEjercicios } from './mod-ejercicios.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 
-let todasLasSesiones = [];
+export let todasLasSesiones = [];
 let unsubSesiones = null;
 const contenedor = document.getElementById('lista-sesiones-container');
 
@@ -80,6 +80,7 @@ export function renderizarSesiones() {
         
         const dashEntreno = document.getElementById('dash-proximo-entreno');
         if (dashEntreno) dashEntreno.innerText = "Sin planificar";
+        document.dispatchEvent(new Event('sesionesActualizadas'));
         return;
     }
     
@@ -107,6 +108,7 @@ function dibujarSesiones() {
     contenedor.innerHTML = sesionesEquipo.length === 0 ? `<div class="col-span-full py-10 text-center text-slate-400">Sin sesiones planificadas para este equipo</div>` : '';
     const dashEntreno = document.getElementById('dash-proximo-entreno');
     if (dashEntreno) dashEntreno.innerText = sesionesEquipo.length > 0 ? sesionesEquipo[0].fecha : "Sin planificar";
+    document.dispatchEvent(new Event('sesionesActualizadas'));
 
     sesionesEquipo.forEach(ses => {
         const card = document.createElement('div');

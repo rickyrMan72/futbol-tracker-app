@@ -70,6 +70,7 @@
                     <li><a href="#" data-target="view-sesiones" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-stopwatch w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Sesiones</span></a></li>
                     <li><a href="#" data-target="view-partidos" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-trophy w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Partidos</span></a></li>
                     <li><a href="#" data-target="view-pizarra" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-chess-board w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Pizarra</span></a></li>
+                    <li><a href="#" data-target="view-estadisticas" class="nav-link hover:bg-slate-800 hover:text-white border-r-4 border-transparent flex items-center px-5 sm:px-6 py-2 sm:py-2.5 transition-colors"><i class="fa-solid fa-chart-pie w-6 text-center mr-2"></i><span class="font-medium text-sm sm:text-base">Estadísticas</span></a></li>
                 </ul>
             </nav>
             <div class="mt-auto p-2 border-t border-slate-800/70 shrink-0">
@@ -407,6 +408,36 @@
                     <div class="flex gap-2">
                         <button id="pizarra-btn-del" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors border border-red-200 flex items-center hidden" title="Eliminar este paso"><i class="fa-solid fa-trash mr-1"></i> Eliminar Paso</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- VISTA 8: ESTADÍSTICAS GLOBALES -->
+            <div id="view-estadisticas" class="app-view hidden fade-in space-y-6 pb-8">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">Estadísticas Globales</h3>
+                        <p class="text-xs sm:text-sm text-slate-500 mt-0.5" id="stats-glob-meta">Selecciona un equipo para analizar su rendimiento acumulado.</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                        <div class="flex bg-slate-200/80 p-1 rounded-lg">
+                            <button type="button" id="btn-stats-scope-jugados" class="px-3 py-1.5 bg-white shadow-sm text-slate-900 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Partidos disputados</button>
+                            <button type="button" id="btn-stats-scope-todos" class="px-3 py-1.5 text-slate-600 hover:text-slate-900 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Todos con convocatoria</button>
+                        </div>
+                        <button type="button" id="btn-refresh-estadisticas" class="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap shrink-0" title="Recalcular estadísticas">
+                            <i class="fa-solid fa-rotate-right text-emerald-600"></i> Actualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mensaje cuando no hay equipo seleccionado -->
+                <div id="msg-no-equipo-estadisticas" class="flex flex-col items-center justify-center py-16 text-slate-400 bg-white rounded-xl border border-slate-200">
+                    <i class="fa-solid fa-chart-pie text-5xl mb-3 text-slate-200"></i>
+                    <p class="text-base font-medium text-slate-600 text-center">Selecciona o crea un equipo en la parte superior para ver sus estadísticas globales.</p>
+                </div>
+
+                <!-- Contenido dinámico -->
+                <div id="estadisticas-globales-content" class="hidden space-y-6">
+                    <!-- Cargado dinámicamente por js/mod-estadisticas.js -->
                 </div>
             </div>
 

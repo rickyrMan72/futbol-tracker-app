@@ -886,6 +886,7 @@ export function renderizarPartidos() {
         if (badgePartidos) badgePartidos.innerText = "0 partidos jugados";
         valoracionesMediasJugadores = {};
         document.dispatchEvent(new Event('valoracionesActualizadas'));
+        document.dispatchEvent(new Event('partidosActualizados'));
         return;
     }
     
@@ -900,6 +901,7 @@ export function renderizarPartidos() {
                 return dateA - dateB;
             });
             dibujarPartidos();
+            document.dispatchEvent(new Event('partidosActualizados'));
         }, (err) => { if (err.code !== 'permission-denied' || auth.currentUser) console.error(err); });
     }
 }

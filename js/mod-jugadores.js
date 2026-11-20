@@ -885,6 +885,7 @@ function renderizar() {
 
     // Re-apply roles visibility if needed
     document.dispatchEvent(new Event('rolesUpdated'));
+    document.dispatchEvent(new Event('jugadoresActualizados'));
 }
 
 function bindCardEvents(element, jug, stats) {
