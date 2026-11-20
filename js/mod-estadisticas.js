@@ -1,5 +1,5 @@
 import { db, collection, getDocs, auth } from './firebase-config.js';
-import { compararEfemeridesAsc } from './ui.js';
+import { compararEfemeridesAsc, mostrarNotificacion } from './ui.js';
 import { todosLosJugadores, equipoIdActivo } from './mod-jugadores.js';
 import { todosLosEquipos } from './mod-equipos.js';
 import { todosLosPartidos } from './mod-partidos.js';
@@ -50,6 +50,8 @@ export function initEstadisticas() {
     const btnScopeJugados = document.getElementById('btn-stats-scope-jugados');
     const btnScopeTodos = document.getElementById('btn-stats-scope-todos');
     const btnRefresh = document.getElementById('btn-refresh-estadisticas');
+    const btnExportCsv = document.getElementById('btn-export-estadisticas-csv');
+    const btnExportPdf = document.getElementById('btn-export-estadisticas-pdf');
 
     const updateScopeButtons = () => {
         if (!btnScopeJugados || !btnScopeTodos) return;
@@ -80,6 +82,14 @@ export function initEstadisticas() {
         renderizarEstadisticasGlobales(true);
     });
 
+    btnExportCsv?.addEventListener('click', () => {
+        exportarEstadisticasCSV();
+    });
+
+    btnExportPdf?.addEventListener('click', () => {
+        exportarEstadisticasPDF();
+    });
+
     document.addEventListener('view-changed', (e) => {
         if (e.detail === 'view-estadisticas') {
             renderizarEstadisticasGlobales();
@@ -98,6 +108,13 @@ export function initEstadisticas() {
     document.addEventListener('jugadoresActualizados', scheduleAutoRefresh);
     document.addEventListener('sesionesActualizadas', scheduleAutoRefresh);
     document.getElementById('select-equipo')?.addEventListener('change', scheduleAutoRefresh);
+}
+
+function actualizarEstadoBotonesExportacion(habilitado) {
+    const btnCsv = document.getElementById('btn-export-estadisticas-csv');
+    const btnPdf = document.getElementById('btn-export-estadisticas-pdf');
+    if (btnCsv) btnCsv.disabled = !habilitado;
+    if (btnPdf) btnPdf.disabled = !habilitado;
 }
 
 async function calcularDatosGlobales(equipoId) {
@@ -482,6 +499,8 @@ export async function renderizarEstadisticasGlobales(forceLoading = false) {
     if (!contentEl) return;
 
     if (!equipoIdActivo) {
+        lastComputedDataset = null;
+        actualizarEstadoBotonesExportacion(false);
         if (msgNoEquipo) msgNoEquipo.classList.remove('hidden');
         contentEl.classList.add('hidden');
         contentEl.innerHTML = '';
@@ -499,6 +518,7 @@ export async function renderizarEstadisticasGlobales(forceLoading = false) {
     const myVersion = ++renderVersion;
 
     if (forceLoading || !lastComputedDataset || lastComputedDataset.equipoObj?.id !== equipoIdActivo) {
+        actualizarEstadoBotonesExportacion(false);
         contentEl.innerHTML = `
             <div class="bg-white rounded-xl border border-slate-200 py-14 flex flex-col items-center justify-center text-slate-400">
                 <i class="fa-solid fa-circle-notch fa-spin text-2xl text-emerald-600 mb-3"></i>
@@ -514,6 +534,9 @@ export async function renderizarEstadisticasGlobales(forceLoading = false) {
         lastComputedDataset = data;
         const eq = data.equipoObj;
         const r = data.resumen;
+        const hayDatos = !(r.disputados === 0 && r.partidosConConvocatoria === 0 && data.jugadoresLista.length === 0);
+        actualizarEstadoBotonesExportacion(hayDatos);
+
         if (metaEl) {
             const parts = [
                 eq.nombre || 'Equipo activo',
@@ -528,6 +551,7 @@ export async function renderizarEstadisticasGlobales(forceLoading = false) {
         renderContenidoCompleto(data);
     } catch (err) {
         console.error('Error cargando estadísticas globales:', err);
+        actualizarEstadoBotonesExportacion(false);
         contentEl.innerHTML = `
             <div class="bg-white rounded-xl border border-rose-200 p-8 text-center">
                 <i class="fa-solid fa-triangle-exclamation text-2xl text-rose-500 mb-2"></i>
@@ -784,11 +808,8 @@ function renderContenidoCompleto(data) {
     renderChartGlobalGoles(seriePartidos);
 }
 
-function renderTablaDesconvocados(data) {
-    const wrapper = document.getElementById('tabla-desconvocados-wrapper');
-    if (!wrapper) return;
-
-    const { jugadoresLista, resumen } = data;
+function getDesconvocadosFiltrados(data) {
+    const { jugadoresLista } = data;
     const term = searchDesconvocados.trim().toLowerCase();
 
     // Orden estricto: mayor a menor número de desconvocatorias, desempate por dorsal ascendente y nombre
@@ -813,6 +834,16 @@ function renderTablaDesconvocados(data) {
             (j.posicion || '').toLowerCase().includes(term)
         );
     }
+
+    return lista;
+}
+
+function renderTablaDesconvocados(data) {
+    const wrapper = document.getElementById('tabla-desconvocados-wrapper');
+    if (!wrapper) return;
+
+    const { jugadoresLista, resumen } = data;
+    const lista = getDesconvocadosFiltrados(data);
 
     if (jugadoresLista.length === 0) {
         wrapper.innerHTML = `<div class="p-8 text-center text-xs text-slate-400">No hay jugadores dados de alta en este equipo.</div>`;
@@ -937,10 +968,7 @@ function renderTablaDesconvocados(data) {
     });
 }
 
-function renderTablaPlantillaGlobal(data) {
-    const wrapper = document.getElementById('tabla-plantilla-global-wrapper');
-    if (!wrapper) return;
-
+function getPlantillaOrdenada(data) {
     const term = searchPlantilla.trim().toLowerCase();
     let lista = [...data.jugadoresLista];
 
@@ -980,6 +1008,15 @@ function renderTablaPlantillaGlobal(data) {
         if (va !== vb) return sortPlantillaDir === 'asc' ? va - vb : vb - va;
         return (parseInt(a.dorsal, 10) || 999) - (parseInt(b.dorsal, 10) || 999);
     });
+
+    return lista;
+}
+
+function renderTablaPlantillaGlobal(data) {
+    const wrapper = document.getElementById('tabla-plantilla-global-wrapper');
+    if (!wrapper) return;
+
+    const lista = getPlantillaOrdenada(data);
 
     const thSort = (col, label, align = 'text-center', title = '') => {
         const active = sortPlantillaCol === col;
@@ -1148,3 +1185,603 @@ function renderChartGlobalGoles(seriePartidos) {
         }
     });
 }
+
+function slugifyNombreArchivo(str) {
+    return String(str || 'equipo')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'equipo';
+}
+
+function csvCell(val) {
+    const s = String(val ?? '');
+    if (s.includes(';') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+
+function exportarEstadisticasCSV() {
+    if (!lastComputedDataset) {
+        mostrarNotificacion('No hay estadísticas activas para exportar', true);
+        return;
+    }
+
+    const data = lastComputedDataset;
+    const eq = data.equipoObj || {};
+    const r = data.resumen;
+    const pj = Math.max(1, r.disputados);
+    const efectividadPct = r.disputados > 0 ? Math.round((r.puntos / (r.disputados * 3)) * 100) : 0;
+    const tirosTotales = r.tirosPuerta + r.tirosFuera;
+    const punteriaPct = tirosTotales > 0 ? Math.round((r.tirosPuerta / tirosTotales) * 100) : 0;
+    const totalPases = r.pasesCorrectos + r.pasesFallados;
+    const precisionPasePct = totalPases > 0 ? Math.round((r.pasesCorrectos / totalPases) * 100) : '';
+    const alcanceTexto = scopeModo === 'todos' ? 'Todos con convocatoria' : 'Partidos disputados';
+    const fechaHoy = new Date().toISOString().split('T')[0];
+
+    const filas = [];
+    const addRow = (...cols) => filas.push(cols.map(csvCell).join(';'));
+
+    addRow('ESTADÍSTICAS GLOBALES DEL EQUIPO');
+    addRow('Equipo', eq.nombre || 'Equipo');
+    addRow('Modalidad', eq.modalidad || '-');
+    addRow('Temporada', eq.temporada || '-');
+    addRow('Alcance evaluado', alcanceTexto);
+    addRow('Fecha de exportación', formatFechaCorta(fechaHoy));
+    filas.push('');
+
+    addRow('RESUMEN DE TEMPORADA');
+    addRow('Métrica', 'Valor');
+    addRow('Partidos disputados', r.disputados);
+    addRow('Victorias', r.victorias);
+    addRow('Empates', r.empates);
+    addRow('Derrotas', r.derrotas);
+    addRow('Puntos', r.puntos);
+    addRow('Efectividad (%)', `${efectividadPct}%`);
+    addRow('Goles a favor', r.golesFavor);
+    addRow('Goles en contra', r.golesContra);
+    addRow('Diferencia de goles', r.golesFavor - r.golesContra);
+    addRow('Media goles a favor / partido', (r.golesFavor / pj).toFixed(2));
+    addRow('Media goles en contra / partido', (r.golesContra / pj).toFixed(2));
+    addRow('Tiros a puerta', r.tirosPuerta);
+    addRow('Tiros fuera', r.tirosFuera);
+    addRow('Puntería (%)', `${punteriaPct}%`);
+    addRow('Tiros rival', r.tirosRival + r.paradas);
+    addRow('Paradas portero', r.paradas);
+    addRow('Córners a favor', r.cornersFavor);
+    addRow('Córners en contra', r.cornersContra);
+    addRow('Faltas recibidas', r.faltasRecibidas);
+    addRow('Faltas cometidas', r.faltasCometidas);
+    addRow('Recuperaciones', r.recuperaciones);
+    addRow('Pérdidas', r.perdidas);
+    addRow('Pases correctos', r.pasesCorrectos);
+    addRow('Pases fallados', r.pasesFallados);
+    if (precisionPasePct !== '') addRow('Precisión de pase (%)', `${precisionPasePct}%`);
+    addRow('Tarjetas amarillas (propias / rival)', `${r.amarillas} / ${r.amarillasRival}`);
+    addRow('Tarjetas rojas (propias / rival)', `${r.rojas} / ${r.rojasRival}`);
+    addRow('Sesiones de entrenamiento', r.totalSesiones);
+    addRow('Asistencia media entrenamientos (%)', r.asistenciaMediaSesionesPct !== null ? `${r.asistenciaMediaSesionesPct}%` : '-');
+    addRow('Partidos con convocatoria registrada', r.partidosConConvocatoria);
+    addRow('Media convocados por partido', r.mediaConvocadosPorPartido || '-');
+    filas.push('');
+
+    addRow('BALANCE LOCAL VS VISITANTE');
+    addRow('Condición', 'PJ', 'Victorias', 'Empates', 'Derrotas', 'Goles Favor', 'Goles Contra');
+    addRow('Local', r.casa.pj, r.casa.v, r.casa.e, r.casa.d, r.casa.gf, r.casa.gc);
+    addRow('Visitante', r.fuera.pj, r.fuera.v, r.fuera.e, r.fuera.d, r.fuera.gf, r.fuera.gc);
+    filas.push('');
+
+    const listaDesc = getDesconvocadosFiltrados(data);
+    addRow(`LISTA COMPLETA DE DESCONVOCADOS (${alcanceTexto})`);
+    addRow('#', 'Dorsal', 'Jugador', 'Posición', 'Estado', 'Desconvocatorias', 'Convocatorias', 'Partidos Evaluados', '% Ausencia', 'Última Desconvocatoria', 'Detalle de Partidos Desconvocado');
+    listaDesc.forEach((j, idx) => {
+        const ultima = j.partidosDesconvocados[0];
+        const ultimaTxt = ultima ? `${formatFechaCorta(ultima.fecha)} ${ultima.esLocal ? 'vs' : '@'} ${ultima.rival}` : 'Pleno de convocatorias';
+        const detalleTxt = j.partidosDesconvocados.length > 0
+            ? j.partidosDesconvocados.map(pd => `${formatFechaCorta(pd.fecha)} ${pd.esLocal ? 'vs' : '@'} ${pd.rival}`).join(' | ')
+            : 'Ninguno';
+        addRow(
+            idx + 1,
+            j.dorsal || '-',
+            j.nombre,
+            j.posicion,
+            j.estado,
+            j.desconvocatorias,
+            j.convocatorias,
+            j.partidosEvaluadosConv,
+            `${j.pctDesconvocado}%`,
+            ultimaTxt,
+            detalleTxt
+        );
+    });
+    filas.push('');
+
+    const listaPlantilla = getPlantillaOrdenada(data);
+    addRow('RENDIMIENTO GLOBAL DE LA PLANTILLA');
+    addRow('Dorsal', 'Jugador', 'Posición', 'Estado', 'PJ', 'Titularidades', 'Suplencias', 'Desconvocatorias', 'Minutos', 'Goles', 'Asistencias', 'Tiros a Puerta', 'Tiros Totales', 'Paradas', 'Faltas Recibidas', 'Faltas Cometidas', 'Amarillas', 'Rojas', 'Entrenos Asistidos', 'Total Entrenos', '% Entrenos', 'Valoración Media');
+    listaPlantilla.forEach(j => {
+        addRow(
+            j.dorsal || '-',
+            j.nombre,
+            j.posicion,
+            j.estado,
+            j.jugados,
+            j.titularidades,
+            j.suplencias,
+            j.desconvocatorias,
+            j.minutos,
+            j.goles,
+            j.asistencias,
+            j.tirosPuerta,
+            j.tirosTotales,
+            j.paradas,
+            j.faltasRecibidas,
+            j.faltasCometidas,
+            j.amarillas,
+            j.rojas,
+            j.asistSesiones,
+            j.totalSesiones,
+            j.asistSesionesPct !== null ? `${j.asistSesionesPct}%` : '-',
+            j.valoracionMedia !== null ? j.valoracionMedia.toFixed(1) : '-'
+        );
+    });
+
+    const csvContent = '\uFEFF' + filas.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const filename = `estadisticas-globales-${slugifyNombreArchivo(eq.nombre)}-${fechaHoy}.csv`;
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    }, 1500);
+
+    mostrarNotificacion('Estadísticas exportadas a CSV con éxito');
+}
+
+function buildEstadisticasPdfElement(data) {
+    const eq = data.equipoObj || {};
+    const r = data.resumen;
+    const pj = Math.max(1, r.disputados);
+    const efectividadPct = r.disputados > 0 ? Math.round((r.puntos / (r.disputados * 3)) * 100) : 0;
+    const difGoles = r.golesFavor - r.golesContra;
+    const difGolesStr = difGoles > 0 ? `+${difGoles}` : `${difGoles}`;
+    const tirosTotales = r.tirosPuerta + r.tirosFuera;
+    const punteriaPct = tirosTotales > 0 ? Math.round((r.tirosPuerta / tirosTotales) * 100) : 0;
+    const totalPases = r.pasesCorrectos + r.pasesFallados;
+    const precisionPasePct = totalPases > 0 ? Math.round((r.pasesCorrectos / totalPases) * 100) : null;
+    const alcanceTexto = scopeModo === 'todos' ? 'Todos con convocatoria' : 'Partidos disputados';
+    const fechaHoy = formatFechaCorta(new Date().toISOString().split('T')[0]);
+
+    let chartImg = '';
+    if (data.seriePartidos.length > 0 && window.Chart) {
+        try {
+            const ultimos = data.seriePartidos.slice(-14);
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = 1400;
+            offCanvas.height = 420;
+            const ctx = offCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 1400, 420);
+
+            const chartTmp = new Chart(offCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ultimos.map(p => `${formatFechaCorta(p.fecha).slice(0, 5)} ${p.esLocal ? 'vs' : '@'} ${p.rival}`),
+                    datasets: [
+                        {
+                            label: 'Goles a favor',
+                            data: ultimos.map(p => p.gf),
+                            backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                            borderColor: 'rgb(5, 150, 105)',
+                            borderWidth: 1.5,
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Goles en contra',
+                            data: ultimos.map(p => p.gc),
+                            backgroundColor: 'rgba(244, 63, 94, 0.78)',
+                            borderColor: 'rgb(225, 29, 72)',
+                            borderWidth: 1.5,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    layout: { padding: { left: 10, right: 15, top: 10, bottom: 5 } },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 14, font: { size: 13, weight: 'bold' } }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: { stepSize: 1, precision: 0, font: { size: 12 }, color: '#475569' },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11, weight: 'bold' }, color: '#334155', maxRotation: 25, minRotation: 0 }
+                        }
+                    }
+                }
+            });
+            chartImg = offCanvas.toDataURL('image/png');
+            chartTmp.destroy();
+        } catch (e) {
+            console.warn('Error generando gráfico offscreen de estadísticas globales:', e);
+        }
+    }
+
+    const listaDesc = getDesconvocadosFiltrados(data);
+    const filtrosDescActivos = [
+        filtroEstadoDesc === 'disponibles' ? 'Solo disponibles' : '',
+        soloConDesconvocatorias ? 'Sin 0 desconvocatorias' : '',
+        searchDesconvocados.trim() ? `Búsqueda: "${searchDesconvocados.trim()}"` : ''
+    ].filter(Boolean);
+
+    const filasDescHtml = listaDesc.length === 0
+        ? `<tr><td colspan="7" style="padding: 18px; text-align: center; color: #94a3b8;">No hay jugadores que coincidan con los filtros actuales.</td></tr>`
+        : listaDesc.map((j, idx) => {
+            const ultima = j.partidosDesconvocados[0];
+            const ultimaTxt = ultima
+                ? `${formatFechaCorta(ultima.fecha)} · ${ultima.esLocal ? 'vs' : '@'} ${escapeHtml(ultima.rival)}`
+                : 'Pleno de convocatorias';
+            const partidosTxt = j.partidosDesconvocados.length > 0
+                ? j.partidosDesconvocados.map(pd => `${formatFechaCorta(pd.fecha)} (${pd.esLocal ? 'vs' : '@'} ${escapeHtml(pd.rival)})`).join(', ')
+                : '—';
+            const colorDesc = j.desconvocatorias > 0 ? '#e11d48' : '#059669';
+
+            return `
+                <tr class="pdf-avoid-break" style="border-bottom: 1px solid #f1f5f9; break-inside: avoid; page-break-inside: avoid;">
+                    <td style="padding: 7px 8px; text-align: center; font-weight: 700; color: #94a3b8;">${idx + 1}</td>
+                    <td style="padding: 7px 8px;">
+                        <div style="font-weight: 700; color: #1e293b;">#${escapeHtml(j.dorsal || '-')} ${escapeHtml(j.nombre)}</div>
+                        <div style="font-size: 9px; color: #64748b;">${escapeHtml(j.posicion)}</div>
+                    </td>
+                    <td style="padding: 7px 6px; font-size: 10px; color: #334155;">${escapeHtml(j.estado)}</td>
+                    <td style="padding: 7px 8px; text-align: right; font-weight: 900; font-size: 13px; color: ${colorDesc};">${j.desconvocatorias}</td>
+                    <td style="padding: 7px 8px; text-align: right; color: #475569; font-weight: 600;">${j.convocatorias} / ${j.partidosEvaluadosConv}</td>
+                    <td style="padding: 7px 8px; text-align: right; font-weight: 700; color: #334155;">${j.pctDesconvocado}%</td>
+                    <td style="padding: 7px 8px; font-size: 10px; color: #475569;">
+                        <div style="font-weight: 600; color: #1e293b;">${ultimaTxt}</div>
+                        ${j.desconvocatorias > 1 ? `<div style="font-size: 9px; color: #64748b; margin-top: 2px;">${partidosTxt}</div>` : ''}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    const listaPlantilla = getPlantillaOrdenada(data);
+    const filasPlantillaHtml = listaPlantilla.length === 0
+        ? `<tr><td colspan="12" style="padding: 18px; text-align: center; color: #94a3b8;">No hay jugadores que coincidan con el filtro.</td></tr>`
+        : listaPlantilla.map(j => {
+            const valStr = j.valoracionMedia !== null
+                ? (j.valoracionMedia > 0 ? `+${j.valoracionMedia.toFixed(1)}` : j.valoracionMedia.toFixed(1))
+                : '—';
+            const valColor = j.valoracionMedia === null
+                ? '#94a3b8'
+                : (j.valoracionMedia > 0 ? '#059669' : (j.valoracionMedia < 0 ? '#e11d48' : '#334155'));
+            const entrenosTxt = j.asistSesionesPct !== null
+                ? `${j.asistSesiones}/${j.totalSesiones} (${j.asistSesionesPct}%)`
+                : '—';
+
+            return `
+                <tr class="pdf-avoid-break" style="border-bottom: 1px solid #f1f5f9; break-inside: avoid; page-break-inside: avoid;">
+                    <td style="padding: 6px 8px;">
+                        <span style="font-weight: 700; color: #94a3b8;">#${escapeHtml(j.dorsal || '-')}</span>
+                        <span style="font-weight: 700; color: #1e293b; margin-left: 4px;">${escapeHtml(j.nombre)}</span>
+                        <div style="font-size: 9px; color: #64748b;">${escapeHtml(j.posicion)}</div>
+                    </td>
+                    <td style="padding: 6px 5px; text-align: center; font-weight: 700; color: #1e293b;">${j.jugados}</td>
+                    <td style="padding: 6px 5px; text-align: center; color: #64748b;">${j.titularidades}/${j.suplencias}</td>
+                    <td style="padding: 6px 5px; text-align: center; font-weight: 700; color: ${j.desconvocatorias > 0 ? '#e11d48' : '#94a3b8'};">${j.desconvocatorias}</td>
+                    <td style="padding: 6px 5px; text-align: right; color: #334155;">${j.minutos}'</td>
+                    <td style="padding: 6px 5px; text-align: center; font-weight: 700; color: ${j.goles > 0 ? '#059669' : '#94a3b8'};">${j.goles}</td>
+                    <td style="padding: 6px 5px; text-align: center; font-weight: 700; color: ${j.asistencias > 0 ? '#2563eb' : '#94a3b8'};">${j.asistencias}</td>
+                    <td style="padding: 6px 5px; text-align: center; color: #475569;">${j.tirosPuerta}/${j.tirosTotales}</td>
+                    <td style="padding: 6px 5px; text-align: center; font-weight: 600; color: ${j.paradas > 0 ? '#059669' : '#94a3b8'};">${j.paradas}</td>
+                    <td style="padding: 6px 5px; text-align: center; color: #475569;">${j.amarillas}/${j.rojas}</td>
+                    <td style="padding: 6px 5px; text-align: center; color: #475569; font-size: 9px;">${entrenosTxt}</td>
+                    <td style="padding: 6px 8px; text-align: right; font-weight: 800; color: ${valColor};">${valStr}</td>
+                </tr>
+            `;
+        }).join('');
+
+    const escudoHtml = eq.escudo
+        ? `<img src="${escapeHtml(eq.escudo)}" crossorigin="anonymous" onerror="this.style.display='none'" style="width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px;" alt="Escudo">`
+        : '';
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'pdf-estadisticas-globales-wrapper';
+    wrapper.style.width = '100%';
+    wrapper.style.backgroundColor = '#ffffff';
+    wrapper.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    wrapper.style.color = '#1e293b';
+    wrapper.style.boxSizing = 'border-box';
+
+    wrapper.innerHTML = `
+        <!-- PÁGINA 1: RESUMEN GLOBAL, GRÁFICO Y MÉTRICAS COLECTIVAS -->
+        <div class="pdf-page" style="padding: 16px 20px; box-sizing: border-box;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    ${escudoHtml}
+                    <div>
+                        <div style="font-size: 17px; font-weight: 800; color: #0f172a;">Estadísticas Globales · ${escapeHtml(eq.nombre || 'Equipo')}</div>
+                        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                            ${[eq.modalidad, eq.temporada, `${r.disputados} partidos disputados`, `${data.jugadoresLista.length} jugadores`].filter(Boolean).map(escapeHtml).join(' · ')}
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: right; font-size: 10px; color: #64748b;">
+                    <div style="font-weight: 700; color: #334155;">Alcance: ${escapeHtml(alcanceTexto)}</div>
+                    <div style="margin-top: 2px;">Exportado: ${fechaHoy}</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px;">
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Balance</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 4px;">${r.victorias}V · ${r.empates}E · ${r.derrotas}D</div>
+                    <div style="font-size: 10px; color: #475569; margin-top: 3px;">${r.puntos} pts (${efectividadPct}% efect.)</div>
+                </div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px;">
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Balance Goleador</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #059669; margin-top: 4px;">${r.golesFavor} GF <span style="color: #94a3b8; font-size: 12px;">/</span> <span style="color: #e11d48;">${r.golesContra} GC</span></div>
+                    <div style="font-size: 10px; color: #475569; margin-top: 3px;">Dif: ${difGolesStr} · ${(r.golesFavor / pj).toFixed(2)} - ${(r.golesContra / pj).toFixed(2)}</div>
+                </div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px;">
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Ataque y Balón Parado</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 4px;">${tirosTotales} <span style="font-size: 11px; font-weight: 600; color: #64748b;">tiros (${punteriaPct}%)</span></div>
+                    <div style="font-size: 10px; color: #475569; margin-top: 3px;">Córners: ${r.cornersFavor} fav / ${r.cornersContra} con</div>
+                </div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px;">
+                    <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Disciplina y Entrenos</div>
+                    <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin-top: 4px;">${r.asistenciaMediaSesionesPct !== null ? `${r.asistenciaMediaSesionesPct}%` : '—'} <span style="font-size: 11px; font-weight: 600; color: #64748b;">asist.</span></div>
+                    <div style="font-size: 10px; color: #475569; margin-top: 3px;">Tarj: ${r.amarillas}A / ${r.rojas}R · Conv: ${r.mediaConvocadosPorPartido || '—'}</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; margin-bottom: 14px;">
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">Evolución de Goles por Partido</div>
+                    ${chartImg ? `<img src="${chartImg}" width="1400" height="420" style="width: 100%; height: 190px; object-fit: contain; display: block;" alt="Evolución de goles">` : '<div style="padding: 36px 10px; text-align: center; color: #94a3b8; font-size: 11px;">Sin partidos disputados para graficar</div>'}
+                </div>
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                    <div style="font-size: 12px; font-weight: 800; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; margin-bottom: 8px;">Local vs Visitante y Colectivas</div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #e2e8f0; color: #64748b; text-transform: uppercase;">
+                                <th style="padding: 4px 0; text-align: left;">Condición</th>
+                                <th style="padding: 4px; text-align: center;">PJ</th>
+                                <th style="padding: 4px; text-align: center;">V-E-D</th>
+                                <th style="padding: 4px 0; text-align: right;">GF-GC</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid #f1f5f9;">
+                                <td style="padding: 5px 0; font-weight: 700;">Local</td>
+                                <td style="padding: 5px; text-align: center;">${r.casa.pj}</td>
+                                <td style="padding: 5px; text-align: center;">${r.casa.v}-${r.casa.e}-${r.casa.d}</td>
+                                <td style="padding: 5px 0; text-align: right; font-weight: 700;">${r.casa.gf}-${r.casa.gc}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 5px 0; font-weight: 700;">Visitante</td>
+                                <td style="padding: 5px; text-align: center;">${r.fuera.pj}</td>
+                                <td style="padding: 5px; text-align: center;">${r.fuera.v}-${r.fuera.e}-${r.fuera.d}</td>
+                                <td style="padding: 5px 0; text-align: right; font-weight: 700;">${r.fuera.gf}-${r.fuera.gc}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div style="font-size: 10px; color: #475569; line-height: 1.6; border-top: 1px solid #f1f5f9; padding-top: 8px;">
+                        <div style="display: flex; justify-content: space-between;"><span>Tiros rival / Paradas:</span><strong style="color: #0f172a;">${r.tirosRival + r.paradas} / ${r.paradas}</strong></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Faltas (Rec. / Com.):</span><strong style="color: #0f172a;">${r.faltasRecibidas} / ${r.faltasCometidas}</strong></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Recuperaciones / Pérdidas:</span><strong style="color: #0f172a;">${r.recuperaciones} / ${r.perdidas}</strong></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Pases (Corr. / Fall.):</span><strong style="color: #0f172a;">${r.pasesCorrectos} / ${r.pasesFallados}${precisionPasePct !== null ? ` (${precisionPasePct}%)` : ''}</strong></div>
+                        <div style="display: flex; justify-content: space-between;"><span>Tarjetas Rival (A / R):</span><strong style="color: #0f172a;">${r.amarillasRival} / ${r.rojasRival}</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PÁGINA 2: LISTA COMPLETA DE DESCONVOCADOS -->
+        <div class="pdf-page pdf-page-break-before" style="page-break-before: always; break-before: page; padding: 16px 20px; box-sizing: border-box;">
+            <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 0;">Lista Completa de Desconvocados</h3>
+                    <p style="font-size: 10px; color: #64748b; margin: 3px 0 0 0;">
+                        Ordenada de mayor a menor nº de desconvocatorias · Evaluados ${r.partidosConConvocatoria} partidos con convocatoria${filtrosDescActivos.length ? ` · Filtros: ${escapeHtml(filtrosDescActivos.join(', '))}` : ''}
+                    </p>
+                </div>
+                <span style="font-size: 10px; font-weight: 700; color: #475569;">${listaDesc.length} jugador${listaDesc.length === 1 ? '' : 'es'}</span>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+                    <thead style="background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">
+                        <tr>
+                            <th style="padding: 8px; text-align: center; width: 28px;">#</th>
+                            <th style="padding: 8px;">Jugador</th>
+                            <th style="padding: 8px;">Estado</th>
+                            <th style="padding: 8px; text-align: right;">Desconv.</th>
+                            <th style="padding: 8px; text-align: right;">Conv.</th>
+                            <th style="padding: 8px; text-align: right;">% Aus.</th>
+                            <th style="padding: 8px;">Última / Partidos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasDescHtml}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PÁGINA 3: RENDIMIENTO GLOBAL DE LA PLANTILLA -->
+        <div class="pdf-page pdf-page-break-before" style="page-break-before: always; break-before: page; padding: 16px 20px; box-sizing: border-box;">
+            <div style="border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 0;">Rendimiento Global de la Plantilla</h3>
+                    <p style="font-size: 10px; color: #64748b; margin: 3px 0 0 0;">Acumulado individual de participación, producción ofensiva, disciplina, entrenamientos y valoración media.</p>
+                </div>
+                <span style="font-size: 10px; font-weight: 700; color: #475569;">${listaPlantilla.length} jugador${listaPlantilla.length === 1 ? '' : 'es'}</span>
+            </div>
+
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: left;">
+                    <thead style="background: #f8fafc; color: #475569; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #e2e8f0;">
+                        <tr>
+                            <th style="padding: 7px 8px;">Jugador</th>
+                            <th style="padding: 7px 5px; text-align: center;">PJ</th>
+                            <th style="padding: 7px 5px; text-align: center;">T/S</th>
+                            <th style="padding: 7px 5px; text-align: center;">Desc</th>
+                            <th style="padding: 7px 5px; text-align: right;">Min</th>
+                            <th style="padding: 7px 5px; text-align: center;">Gol</th>
+                            <th style="padding: 7px 5px; text-align: center;">Asis</th>
+                            <th style="padding: 7px 5px; text-align: center;">Tiros</th>
+                            <th style="padding: 7px 5px; text-align: center;">Par</th>
+                            <th style="padding: 7px 5px; text-align: center;">A/R</th>
+                            <th style="padding: 7px 5px; text-align: center;">Entrenos</th>
+                            <th style="padding: 7px 8px; text-align: right;">Val.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasPlantillaHtml}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    return wrapper;
+}
+
+async function exportarEstadisticasPDF() {
+    if (!lastComputedDataset) {
+        mostrarNotificacion('No hay estadísticas activas para exportar', true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-export-estadisticas-pdf');
+    const originalBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando PDF...';
+    }
+
+    mostrarNotificacion('Generando informe PDF de estadísticas globales...', false);
+
+    try {
+        if (typeof window.html2pdf === 'undefined') {
+            await new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('No se pudo cargar el módulo generador de PDF'));
+                document.head.appendChild(s);
+            });
+        }
+
+        const eqNombre = lastComputedDataset.equipoObj?.nombre || 'equipo';
+        const fechaSlug = new Date().toISOString().split('T')[0];
+        const filename = `estadisticas-globales-${slugifyNombreArchivo(eqNombre)}-${fechaSlug}.pdf`;
+        const printWrapper = buildEstadisticasPdfElement(lastComputedDataset);
+
+        const imgs = Array.from(printWrapper.querySelectorAll('img'));
+        await Promise.all(imgs.map(img => {
+            if (img.complete && img.naturalHeight > 0) return Promise.resolve();
+            return new Promise(res => {
+                img.onload = res;
+                img.onerror = res;
+                if (img.decode) {
+                    img.decode().then(res).catch(res);
+                } else {
+                    setTimeout(res, 100);
+                }
+            });
+        }));
+
+        const opt = {
+            margin: [8, 8, 8, 8],
+            filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                allowTaint: false,
+                letterRendering: true,
+                scrollX: 0,
+                scrollY: 0,
+                logging: false
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'], before: '.pdf-page-break-before', avoid: '.pdf-avoid-break' }
+        };
+
+        let pdfBlob = null;
+        try {
+            pdfBlob = await window.html2pdf().set(opt).from(printWrapper).outputPdf('blob');
+        } catch (blobErr) {
+            console.warn('outputPdf blob falló, intentando descarga directa con html2pdf.save():', blobErr);
+            await window.html2pdf().set(opt).from(printWrapper).save();
+            mostrarNotificacion('PDF descargado con éxito');
+            return;
+        }
+
+        if (!pdfBlob) {
+            throw new Error('No se pudo generar el archivo PDF');
+        }
+
+        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+        let compartido = false;
+
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    title: `Estadísticas Globales: ${eqNombre}`,
+                    text: `Informe de estadísticas globales y desconvocados de ${eqNombre}`,
+                    files: [file]
+                });
+                compartido = true;
+                mostrarNotificacion('PDF compartido con éxito');
+            } catch (shareErr) {
+                console.log('Compartir cancelado o no disponible, procediendo a descarga directa:', shareErr);
+            }
+        }
+
+        if (!compartido) {
+            const url = window.URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            }, 1500);
+            mostrarNotificacion('PDF descargado con éxito');
+        }
+    } catch (err) {
+        console.error('Error al exportar estadísticas globales a PDF:', err);
+        mostrarNotificacion('Error al generar PDF: ' + (err.message || 'desconocido'), true);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+        }
+    }
+}
+
