@@ -850,10 +850,27 @@
                 
                 <!-- Evolución de Acciones ocupando todo el ancho de la pantalla -->
                 <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hidden break-inside-avoid" id="stats-temporal-chart-wrapper">
-                    <h4 class="font-bold text-slate-700 mb-3 border-b pb-2 flex items-center gap-2">
-                        <i class="fa-solid fa-timeline text-indigo-500"></i> Evolución de Acciones en el Tiempo
-                    </h4>
-                    <div class="w-full h-72 flex items-center justify-center">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2 mb-2.5 border-b border-slate-100 pb-2.5">
+                        <h4 class="font-bold text-slate-700 flex items-center gap-2 shrink-0">
+                            <i class="fa-solid fa-timeline text-indigo-500"></i> Evolución de Acciones en el Tiempo
+                        </h4>
+                        <div id="stats-temporal-mode-selector" class="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                            <button type="button" data-temporal-mode="carriles" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Carriles</button>
+                            <button type="button" data-temporal-mode="tramos" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Tramos 10'</button>
+                            <button type="button" data-temporal-mode="pulso" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Pulso 5'</button>
+                            <button type="button" data-temporal-mode="lineas" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Líneas</button>
+                            <button type="button" data-temporal-mode="clasica" class="px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0">Clásica</button>
+                        </div>
+                    </div>
+                    <div id="stats-temporal-lineas-filters" class="hidden flex flex-wrap items-center gap-1.5 mb-2 text-xs">
+                        <span class="text-slate-400 font-medium mr-1">Series:</span>
+                        <button type="button" data-lineas-filter="todas" class="px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0">Todas</button>
+                        <button type="button" data-lineas-filter="ataque" class="px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0">Ataque y Goles</button>
+                        <button type="button" data-lineas-filter="defensa" class="px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0">Defensa y Rival</button>
+                        <button type="button" data-lineas-filter="disciplina" class="px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0">Disciplina y Cambios</button>
+                    </div>
+                    <p id="stats-temporal-subtitle" class="text-[11px] text-slate-500 mb-2"></p>
+                    <div class="w-full h-80 flex items-center justify-center">
                         <canvas id="stats-temporal-chart"></canvas>
                     </div>
                 </div>

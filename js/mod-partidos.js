@@ -22,6 +22,14 @@ let currentStatsConfigAcc = [];
 let currentStatsResumen = {};
 let currentStatsChartPayload = null;
 
+const VALID_TEMPORAL_MODES = ['carriles', 'tramos', 'pulso', 'lineas', 'clasica'];
+let temporalChartMode = VALID_TEMPORAL_MODES.includes(localStorage.getItem('statsTemporalChartMode'))
+    ? localStorage.getItem('statsTemporalChartMode')
+    : 'carriles';
+let temporalLineasFilter = ['todas', 'ataque', 'defensa', 'disciplina'].includes(localStorage.getItem('statsTemporalLineasFilter'))
+    ? localStorage.getItem('statsTemporalLineasFilter')
+    : 'todas';
+
 // Helper to draw Font Awesome icon on canvas for scatter charts
 function getIconCanvas(iconClass, color) {
     const canvas = document.createElement('canvas');
@@ -116,6 +124,28 @@ export function initPartidos() {
             mostrarHistoricos = !mostrarHistoricos;
             actualizarBotonHistoricos();
             dibujarPartidos();
+        });
+
+        document.querySelectorAll('#stats-temporal-mode-selector [data-temporal-mode]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.getAttribute('data-temporal-mode');
+                if (!mode || !VALID_TEMPORAL_MODES.includes(mode) || temporalChartMode === mode) return;
+                temporalChartMode = mode;
+                localStorage.setItem('statsTemporalChartMode', mode);
+                updateTemporalSelectorUI();
+                renderTemporalChartFromCurrentPayload();
+            });
+        });
+
+        document.querySelectorAll('#stats-temporal-lineas-filters [data-lineas-filter]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const filter = btn.getAttribute('data-lineas-filter');
+                if (!filter || temporalLineasFilter === filter) return;
+                temporalLineasFilter = filter;
+                localStorage.setItem('statsTemporalLineasFilter', filter);
+                updateTemporalSelectorUI();
+                renderTemporalChartFromCurrentPayload();
+            });
         });
     }
     
@@ -219,82 +249,8 @@ export function initPartidos() {
                 ctx2.fillStyle = '#ffffff';
                 ctx2.fillRect(0, 0, 1400, 460);
 
-                const tData = currentStatsChartPayload.temporalData;
-                const cByAcc = currentStatsChartPayload.colorByAcc;
-                const iByAcc = currentStatsChartPayload.iconByAcc;
-                const mFinal = currentStatsChartPayload.minFinal > 0 ? currentStatsChartPayload.minFinal : 90;
-
-                const tDatasets = Object.keys(tData).map(accKey => {
-                    const color = cByAcc[accKey] || '#2563eb';
-                    return {
-                        label: accKey,
-                        data: tData[accKey],
-                        pointStyle: getIconCanvas(iByAcc[accKey], color),
-                        pointRadius: 9,
-                        pointBorderWidth: 0,
-                        backgroundColor: color,
-                        borderColor: color,
-                        showLine: false
-                    };
-                });
-
-                const c2 = new Chart(offCanvas2, {
-                    type: 'scatter',
-                    data: { datasets: tDatasets },
-                    options: {
-                        responsive: false,
-                        maintainAspectRatio: false,
-                        animation: false,
-                        layout: {
-                            padding: { left: 10, right: 25, top: 12, bottom: 6 }
-                        },
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    usePointStyle: true,
-                                    boxWidth: 10,
-                                    font: { size: 12, weight: 'bold' },
-                                    padding: 14
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                type: 'linear',
-                                min: 0,
-                                max: mFinal,
-                                title: {
-                                    display: true,
-                                    text: "Minutos del Partido (0' a " + mFinal + "')",
-                                    font: { size: 13, weight: 'bold' },
-                                    color: '#1e293b'
-                                },
-                                ticks: {
-                                    stepSize: 5,
-                                    font: { size: 11, weight: '600' },
-                                    color: '#475569'
-                                },
-                                grid: { color: '#f1f5f9' }
-                            },
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    stepSize: 1,
-                                    font: { size: 11, weight: '600' },
-                                    color: '#475569'
-                                },
-                                title: {
-                                    display: true,
-                                    text: 'Nº Acciones Acumuladas',
-                                    font: { size: 13, weight: 'bold' },
-                                    color: '#1e293b'
-                                },
-                                grid: { color: '#f1f5f9' }
-                            }
-                        }
-                    }
-                });
+                const pdfChartCfg = buildTemporalChartConfig(currentStatsChartPayload, temporalChartMode, temporalLineasFilter, true);
+                const c2 = new Chart(offCanvas2, pdfChartCfg);
                 chart2Img = offCanvas2.toDataURL('image/png');
                 c2.destroy();
             } catch (e) {
@@ -1398,6 +1354,7 @@ async function abrirEstadisticas(par) {
     const minFinal = par.cronometro && par.cronometro.tiempoAcumulado ? Math.floor(par.cronometro.tiempoAcumulado / 60000) : 90;
     let distribucion = {};
     let temporalData = {};
+    let temporalEvents = [];
     let colorByAcc = {};
     let iconByAcc = {};
     
@@ -1427,7 +1384,7 @@ async function abrirEstadisticas(par) {
             if (!temporalData[accNombre]) {
                 temporalData[accNombre] = [];
             }
-            temporalData[accNombre].push({ x: minParse, y: distribucion[accNombre] });
+            temporalData[accNombre].push({ x: minParse, y: distribucion[accNombre], tiempo: ef.tiempoAnotado || `${minParse}'` });
             
             if (!colorByAcc[accNombre]) {
                 let colorHex = '#64748b';
@@ -1443,6 +1400,35 @@ async function abrirEstadisticas(par) {
             }
             
             if ((accInfo && accInfo.isPositive) || ef.isPositive) positivas++;
+
+            const eTipoLow = (eTipo || '').toLowerCase();
+            const accNomLow = (accNombre || '').toLowerCase();
+            const jugNombreEv = (ef.jugadorNombre && ef.jugadorNombre !== 'undefined')
+                ? ef.jugadorNombre
+                : (todosLosJugadores.find(j => j.id === ef.jugadorId)?.nombre || '');
+            const esRivalEv = Boolean(
+                ef.rival ||
+                ef.ambito === 'rival' ||
+                eTipoLow.includes('rival') ||
+                accNomLow.includes('rival') ||
+                eTipoLow === 'corner-contra'
+            );
+            const isPosEv = Boolean((accInfo && accInfo.isPositive === true) || ef.isPositive === true);
+            const isNegEv = Boolean((accInfo && accInfo.isPositive === false) || ef.isPositive === false);
+
+            temporalEvents.push({
+                minuto: minParse,
+                tiempo: ef.tiempoAnotado || `${minParse}'`,
+                periodo: ef.periodo || '1ª Parte',
+                tipo: eTipoLow,
+                nombre: accNombre,
+                jugador: jugNombreEv,
+                esRival: esRivalEv,
+                isPositive: isPosEv,
+                isNegative: isNegEv,
+                colorHex: colorByAcc[accNombre] || '#64748b',
+                icon: iconByAcc[accNombre] || 'fa-circle'
+            });
         }
         
         if (eTipo && typeof eTipo === 'string' && eTipo.startsWith('gol-')) {
@@ -1614,13 +1600,17 @@ async function abrirEstadisticas(par) {
     currentStatsResumen.totalTirosPuerta = totalTirosPuerta;
     currentStatsResumen.totalTirosFuera = totalTirosFuera;
 
+    const maxMinuto = Math.max(minFinal > 0 ? minFinal : 80, ...temporalEvents.map(e => e.minuto), 10);
+
     currentStatsChartPayload = {
         distribucionLabels: Object.keys(distribucion),
         distribucionData: Object.values(distribucion),
         temporalData,
+        temporalEvents,
         colorByAcc,
         iconByAcc,
-        minFinal
+        minFinal,
+        maxMinuto
     };
 
     const getTop3Partido = (metricKey) => {
@@ -1872,44 +1862,518 @@ async function abrirEstadisticas(par) {
             });
             
             if (temporalCanvas && Object.keys(temporalData).length > 0) {
-                try {
-                    const tDatasets = Object.keys(temporalData).map(accKey => {
-                        const color = colorByAcc[accKey] || '#2563eb';
-                        return {
-                            label: accKey,
-                            data: temporalData[accKey],
-                            pointStyle: getIconCanvas(iconByAcc[accKey] || 'fa-circle', color),
-                            pointRadius: 8,
-                            pointHoverRadius: 10,
-                            pointBorderWidth: 0,
-                            backgroundColor: color,
-                            borderColor: color,
-                            showLine: false
-                        };
-                    });
-                    window.temporalChartInstance = new Chart(temporalCanvas, {
-                        type: 'scatter',
-                        data: { datasets: tDatasets },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { 
-                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } }
-                            },
-                            scales: {
-                                x: { type: 'linear', min: 0, max: minFinal > 0 ? minFinal : 90, title: { display: true, text: 'Minutos', font: {size: 11} } },
-                                y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Acumulado', font: {size: 11} } }
-                            }
-                        }
-                    });
-                } catch (tempErr) {
-                    console.error("Error inicializando temporalChartInstance:", tempErr);
-                }
+                updateTemporalSelectorUI();
+                renderTemporalChartFromCurrentPayload();
             }
         }
     } else {
         wrapper.classList.add('hidden');
         if (temporalWrapper) temporalWrapper.classList.add('hidden');
+    }
+}
+
+function updateTemporalSelectorUI() {
+    document.querySelectorAll('#stats-temporal-mode-selector [data-temporal-mode]').forEach(btn => {
+        const mode = btn.getAttribute('data-temporal-mode');
+        if (mode === temporalChartMode) {
+            btn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 bg-white text-slate-900 shadow-xs';
+        } else {
+            btn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 text-slate-600 hover:text-slate-900';
+        }
+    });
+
+    const lineasFilterBar = document.getElementById('stats-temporal-lineas-filters');
+    if (lineasFilterBar) {
+        if (temporalChartMode === 'lineas') {
+            lineasFilterBar.classList.remove('hidden');
+        } else {
+            lineasFilterBar.classList.add('hidden');
+        }
+    }
+
+    document.querySelectorAll('#stats-temporal-lineas-filters [data-lineas-filter]').forEach(btn => {
+        const f = btn.getAttribute('data-lineas-filter');
+        if (f === temporalLineasFilter) {
+            btn.className = 'px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0 bg-indigo-600 text-white shadow-xs';
+        } else {
+            btn.className = 'px-2.5 py-1 rounded-md font-semibold transition-colors whitespace-nowrap shrink-0 bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800';
+        }
+    });
+
+    const subtitleEl = document.getElementById('stats-temporal-subtitle');
+    if (subtitleEl) {
+        const textos = {
+            carriles: 'Cada categoría en su propio carril sin solapamientos · En cada fila: Mi equipo arriba y Rival abajo.',
+            tramos: 'Acciones agrupadas en bloques de 10 minutos para ver en qué fases dominó cada equipo.',
+            pulso: 'Pulso del partido cada 5 minutos: arriba acciones positivas propias, abajo presión rival/faltas/pérdidas.',
+            lineas: 'Líneas escalonadas acumuladas · Usa los filtros superiores para aislar ataque, defensa o disciplina.',
+            clasica: 'Vista clásica de iconos acumulados por minuto.'
+        };
+        subtitleEl.innerText = textos[temporalChartMode] || '';
+    }
+}
+
+function getLaneCategoriaEvento(ev) {
+    const t = ev.tipo || '';
+    const n = (ev.nombre || '').toLowerCase();
+    const esGol = (t.startsWith('gol-') || t === 'gol' || n.startsWith('gol')) && !n.includes('parada');
+    if (esGol) return 'Goles';
+    if (t.startsWith('parada') || n.includes('parada')) return 'Paradas';
+    if (t.includes('tiro') || n.includes('tiro') || t === 'asistencia' || n.includes('asistencia')) return 'Tiros';
+    if (t.includes('corner') || n.includes('córner') || n.includes('corner')) return 'Córners';
+    if (t.includes('amarilla') || t.includes('roja') || n.includes('tarjeta') || n.includes('amarilla') || n.includes('roja')) return 'Tarjetas';
+    if (t.includes('falta') || n.includes('falta')) return 'Faltas';
+    if (t === 'sustitucion' || t === 'sustitucion-lesion' || t === 'cambio' || n.includes('sustit')) return 'Cambios';
+    return 'Otras';
+}
+
+function buildTemporalChartConfig(payload, mode, lineasFilter = 'todas', isOffscreenPdf = false) {
+    const events = payload?.temporalEvents || [];
+    const tData = payload?.temporalData || {};
+    const cByAcc = payload?.colorByAcc || {};
+    const iByAcc = payload?.iconByAcc || {};
+    const maxMinuto = Math.max(10, payload?.maxMinuto || payload?.minFinal || 90);
+    const fontTick = isOffscreenPdf ? 11 : 10;
+    const fontTitle = isOffscreenPdf ? 13 : 11;
+    const fontLegend = isOffscreenPdf ? 12 : 10;
+
+    if (mode === 'carriles') {
+        const baseLanes = ['Goles', 'Tiros', 'Paradas', 'Córners', 'Faltas', 'Tarjetas', 'Cambios'];
+        const hasOtras = events.some(ev => getLaneCategoriaEvento(ev) === 'Otras');
+        const lanesTopDown = hasOtras ? [...baseLanes, 'Otras'] : baseLanes;
+        const lanesFromBottom = [...lanesTopDown].reverse();
+
+        const slotCounts = new Map();
+        const groups = new Map();
+
+        events.forEach(ev => {
+            const laneName = getLaneCategoriaEvento(ev);
+            const laneY = lanesFromBottom.indexOf(laneName);
+            const sideOffset = ev.esRival ? -0.18 : 0.18;
+            const slotKey = `${laneY}_${ev.minuto}_${ev.esRival ? 'R' : 'M'}`;
+            const occ = slotCounts.get(slotKey) || 0;
+            slotCounts.set(slotKey, occ + 1);
+
+            const xOffset = occ === 0 ? 0 : ((occ % 2 === 1 ? 1 : -1) * Math.ceil(occ / 2) * 0.55);
+            const yOffset = occ === 0 ? 0 : (occ % 2 === 1 ? 0.05 : -0.05);
+
+            const label = ev.esRival && !ev.nombre.toLowerCase().includes('rival') && !ev.nombre.toLowerCase().includes('contra')
+                ? `${ev.nombre} (Rival)`
+                : ev.nombre;
+
+            const iconColor = (ev.esRival && ev.colorHex === '#64748b') ? '#e11d48' : ev.colorHex;
+            if (!groups.has(label)) {
+                groups.set(label, { label, icon: ev.icon, color: iconColor, points: [] });
+            }
+            groups.get(label).points.push({
+                x: Math.max(0, Math.min(maxMinuto + 1, ev.minuto + xOffset)),
+                y: laneY + sideOffset + yOffset,
+                ev
+            });
+        });
+
+        const datasets = Array.from(groups.values()).map(g => ({
+            label: g.label,
+            data: g.points,
+            pointStyle: getIconCanvas(g.icon, g.color),
+            pointRadius: isOffscreenPdf ? 9 : 8,
+            pointHoverRadius: 11,
+            pointBorderWidth: 0,
+            backgroundColor: g.color,
+            borderColor: g.color,
+            showLine: false
+        }));
+
+        return {
+            type: 'scatter',
+            data: { datasets },
+            options: {
+                responsive: !isOffscreenPdf,
+                maintainAspectRatio: false,
+                animation: isOffscreenPdf ? false : undefined,
+                layout: isOffscreenPdf ? { padding: { left: 10, right: 25, top: 10, bottom: 6 } } : undefined,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { usePointStyle: true, boxWidth: isOffscreenPdf ? 10 : 8, font: { size: fontLegend, weight: isOffscreenPdf ? 'bold' : 'normal' }, padding: isOffscreenPdf ? 12 : 8 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => {
+                                const ev = items?.[0]?.raw?.ev;
+                                return ev ? `Minuto ${ev.tiempo} (${ev.periodo})` : '';
+                            },
+                            label: (ctx) => {
+                                const ev = ctx.raw?.ev;
+                                if (!ev) return ctx.dataset.label;
+                                const bando = ev.esRival ? 'Rival' : 'Mi equipo';
+                                return ev.jugador ? `${ev.nombre} · ${ev.jugador} [${bando}]` : `${ev.nombre} [${bando}]`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: 0,
+                        max: maxMinuto + 1,
+                        title: { display: true, text: 'Minutos del Partido', font: { size: fontTitle, weight: isOffscreenPdf ? 'bold' : 'normal' } },
+                        ticks: { stepSize: 5, font: { size: fontTick } },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    y: {
+                        type: 'linear',
+                        min: -0.55,
+                        max: lanesFromBottom.length - 0.45,
+                        afterBuildTicks: (axis) => {
+                            axis.ticks = lanesFromBottom.map((_, idx) => ({ value: idx }));
+                        },
+                        ticks: {
+                            font: { size: isOffscreenPdf ? 12 : 11, weight: 'bold' },
+                            color: '#334155',
+                            callback: (val) => lanesFromBottom[val] || ''
+                        },
+                        grid: { color: '#e2e8f0' }
+                    }
+                }
+            }
+        };
+    }
+
+    if (mode === 'tramos') {
+        const numBuckets = Math.max(1, Math.ceil(maxMinuto / 10));
+        const labels = [];
+        const ataque = new Array(numBuckets).fill(0);
+        const defensa = new Array(numBuckets).fill(0);
+        const disciplina = new Array(numBuckets).fill(0);
+        const rival = new Array(numBuckets).fill(0);
+        const detallesBucket = Array.from({ length: numBuckets }, () => ({ ataque: [], defensa: [], disciplina: [], rival: [] }));
+
+        for (let i = 0; i < numBuckets; i++) {
+            const ini = i === 0 ? 0 : i * 10 + 1;
+            const fin = (i + 1) * 10;
+            labels.push(`${ini}-${fin}'`);
+        }
+
+        events.forEach(ev => {
+            const idx = Math.min(numBuckets - 1, Math.max(0, ev.minuto <= 10 ? 0 : Math.floor((ev.minuto - 1) / 10)));
+            const t = ev.tipo || '';
+            const n = (ev.nombre || '').toLowerCase();
+
+            if (ev.esRival) {
+                rival[idx]++;
+                detallesBucket[idx].rival.push(`${ev.minuto}' ${ev.nombre}`);
+            } else if (t.startsWith('gol-') || t === 'gol' || t.includes('tiro') || t === 'corner-favor' || t === 'corner' || t === 'asistencia' || n.includes('tiro') || n.includes('córner a favor')) {
+                ataque[idx]++;
+                detallesBucket[idx].ataque.push(`${ev.minuto}' ${ev.nombre}`);
+            } else if (t.startsWith('parada') || t === 'recuperacion' || t === 'falta-recibida' || n.includes('parada') || n.includes('recuperaci') || n.includes('falta recibida')) {
+                defensa[idx]++;
+                detallesBucket[idx].defensa.push(`${ev.minuto}' ${ev.nombre}`);
+            } else {
+                disciplina[idx]++;
+                detallesBucket[idx].disciplina.push(`${ev.minuto}' ${ev.nombre}`);
+            }
+        });
+
+        const keyMap = ['ataque', 'defensa', 'disciplina', 'rival'];
+
+        return {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'Ataque propio', data: ataque, backgroundColor: 'rgba(16, 185, 129, 0.85)', borderColor: '#059669', borderWidth: 1, borderRadius: 4 },
+                    { label: 'Defensa / Paradas', data: defensa, backgroundColor: 'rgba(59, 130, 246, 0.85)', borderColor: '#2563eb', borderWidth: 1, borderRadius: 4 },
+                    { label: 'Faltas / Cambios / Otras', data: disciplina, backgroundColor: 'rgba(245, 158, 11, 0.85)', borderColor: '#d97706', borderWidth: 1, borderRadius: 4 },
+                    { label: 'Acciones Rival', data: rival, backgroundColor: 'rgba(244, 63, 94, 0.82)', borderColor: '#e11d48', borderWidth: 1, borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: !isOffscreenPdf,
+                maintainAspectRatio: false,
+                animation: isOffscreenPdf ? false : undefined,
+                layout: isOffscreenPdf ? { padding: { left: 10, right: 20, top: 10, bottom: 6 } } : undefined,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: fontLegend, weight: '600' } } },
+                    tooltip: {
+                        callbacks: {
+                            afterLabel: (ctx) => {
+                                const b = detallesBucket[ctx.dataIndex]?.[keyMap[ctx.datasetIndex]] || [];
+                                if (b.length === 0) return '';
+                                return `   (${b.slice(0, 5).join(', ')}${b.length > 5 ? '...' : ''})`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: fontTick } }, title: { display: true, text: 'Nº Acciones', font: { size: fontTitle } } },
+                    x: { grid: { display: false }, ticks: { font: { size: fontTick, weight: '600' } }, title: { display: true, text: 'Tramos del Partido (10 min)', font: { size: fontTitle } } }
+                }
+            }
+        };
+    }
+
+    if (mode === 'pulso') {
+        const numBuckets = Math.max(1, Math.ceil(maxMinuto / 5));
+        const labels = [];
+        const posBars = new Array(numBuckets).fill(0);
+        const negBars = new Array(numBuckets).fill(0);
+        const golesMiosPts = [];
+        const golesRivalPts = [];
+        const bucketNotes = Array.from({ length: numBuckets }, () => ({ pos: [], neg: [] }));
+
+        for (let i = 0; i < numBuckets; i++) {
+            const ini = i === 0 ? 0 : i * 5 + 1;
+            const fin = (i + 1) * 5;
+            labels.push(`${ini}-${fin}'`);
+        }
+
+        events.forEach(ev => {
+            const idx = Math.min(numBuckets - 1, Math.max(0, ev.minuto <= 5 ? 0 : Math.floor((ev.minuto - 1) / 5)));
+            const t = ev.tipo || '';
+            const n = (ev.nombre || '').toLowerCase();
+            const esGol = (t.startsWith('gol-') || t === 'gol' || n.startsWith('gol')) && !n.includes('parada');
+
+            const esPositivoPropio = !ev.esRival && (
+                ev.isPositive ||
+                esGol ||
+                t === 'tiro-puerta' ||
+                t === 'corner-favor' ||
+                t === 'corner' ||
+                t.startsWith('parada') ||
+                t === 'asistencia' ||
+                t === 'falta-recibida' ||
+                t === 'recuperacion' ||
+                t === 'pase-correcto'
+            );
+
+            const esNegativoORival = ev.esRival || ev.isNegative || t === 'falta-cometida' || t === 'amarilla' || t === 'roja' || t === 'perdida';
+
+            if (esPositivoPropio) {
+                posBars[idx]++;
+                bucketNotes[idx].pos.push(`${ev.minuto}' ${ev.nombre}`);
+            } else if (esNegativoORival) {
+                negBars[idx]--;
+                bucketNotes[idx].neg.push(`${ev.minuto}' ${ev.nombre}`);
+            }
+
+            if (esGol) {
+                if (ev.esRival) {
+                    golesRivalPts.push({ x: labels[idx], y: negBars[idx] - 0.45, ev });
+                } else {
+                    golesMiosPts.push({ x: labels[idx], y: posBars[idx] + 0.45, ev });
+                }
+            }
+        });
+
+        const datasets = [
+            {
+                type: 'bar',
+                label: 'Impulso propio (+)',
+                data: posBars,
+                backgroundColor: 'rgba(16, 185, 129, 0.82)',
+                borderColor: '#059669',
+                borderWidth: 1,
+                borderRadius: 4,
+                stack: 'pulso'
+            },
+            {
+                type: 'bar',
+                label: 'Presión rival / Faltas (-)',
+                data: negBars,
+                backgroundColor: 'rgba(244, 63, 94, 0.78)',
+                borderColor: '#e11d48',
+                borderWidth: 1,
+                borderRadius: 4,
+                stack: 'pulso'
+            }
+        ];
+
+        if (golesMiosPts.length > 0) {
+            datasets.push({
+                type: 'scatter',
+                label: 'Gol a favor',
+                data: golesMiosPts,
+                pointStyle: getIconCanvas('fa-futbol', '#059669'),
+                pointRadius: 9,
+                borderColor: '#059669',
+                backgroundColor: '#059669',
+                order: 0
+            });
+        }
+        if (golesRivalPts.length > 0) {
+            datasets.push({
+                type: 'scatter',
+                label: 'Gol Rival',
+                data: golesRivalPts,
+                pointStyle: getIconCanvas('fa-futbol', '#e11d48'),
+                pointRadius: 9,
+                borderColor: '#e11d48',
+                backgroundColor: '#e11d48',
+                order: 0
+            });
+        }
+
+        return {
+            type: 'bar',
+            data: { labels, datasets },
+            options: {
+                responsive: !isOffscreenPdf,
+                maintainAspectRatio: false,
+                animation: isOffscreenPdf ? false : undefined,
+                layout: isOffscreenPdf ? { padding: { left: 10, right: 20, top: 10, bottom: 6 } } : undefined,
+                plugins: {
+                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 10, font: { size: fontLegend, weight: '600' } } },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const rawEv = ctx.raw?.ev;
+                                if (rawEv) return `${rawEv.nombre} (${rawEv.tiempo})`;
+                                const val = Math.abs(ctx.parsed.y || 0);
+                                return `${ctx.dataset.label}: ${val}`;
+                            },
+                            afterLabel: (ctx) => {
+                                if (ctx.raw?.ev) return '';
+                                const side = ctx.datasetIndex === 0 ? 'pos' : 'neg';
+                                const list = bucketNotes[ctx.dataIndex]?.[side] || [];
+                                if (list.length === 0) return '';
+                                return `   ${list.slice(0, 4).join(', ')}${list.length > 4 ? '...' : ''}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { font: { size: fontTick }, maxRotation: 35 }, title: { display: true, text: 'Tramos de 5 minutos', font: { size: fontTitle } } },
+                    y: {
+                        stacked: true,
+                        ticks: {
+                            stepSize: 1,
+                            precision: 0,
+                            font: { size: fontTick },
+                            callback: (v) => Math.abs(v)
+                        },
+                        title: { display: true, text: 'Balance por tramo (Propio ↑ / Rival ↓)', font: { size: fontTitle } },
+                        grid: { color: (c) => c.tick?.value === 0 ? '#64748b' : '#f1f5f9' }
+                    }
+                }
+            }
+        };
+    }
+
+    if (mode === 'lineas') {
+        const matchFilter = (accKey) => {
+            if (lineasFilter === 'todas') return true;
+            const k = accKey.toLowerCase();
+            if (lineasFilter === 'ataque') {
+                return (k.includes('gol') && !k.includes('rival') && !k.includes('parada')) || k.includes('tiro a puerta') || k.includes('tiro fuera') || k.includes('asistencia') || k.includes('córner a favor') || k.includes('corner a favor');
+            }
+            if (lineasFilter === 'defensa') {
+                return k.includes('parada') || k.includes('recuperaci') || k.includes('rival') || k.includes('córner en contra') || k.includes('corner en contra');
+            }
+            if (lineasFilter === 'disciplina') {
+                return k.includes('falta') || k.includes('amarilla') || k.includes('roja') || k.includes('sustit') || k.includes('pérdida') || k.includes('perdida');
+            }
+            return true;
+        };
+
+        const keys = Object.keys(tData).filter(matchFilter);
+        const datasets = keys.map(accKey => {
+            const color = cByAcc[accKey] || '#2563eb';
+            const pts = tData[accKey] || [];
+            const lastY = pts.length > 0 ? pts[pts.length - 1].y : 0;
+            const lineData = [
+                { x: 0, y: 0, isSynthetic: true },
+                ...pts.map(p => ({ x: p.x, y: p.y, tiempo: p.tiempo })),
+                { x: maxMinuto, y: lastY, isSynthetic: true }
+            ];
+            return {
+                label: `${accKey} (${lastY})`,
+                data: lineData,
+                stepped: 'before',
+                fill: false,
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: 2,
+                pointRadius: (ctx) => ctx.raw?.isSynthetic ? 0 : 4,
+                pointHoverRadius: (ctx) => ctx.raw?.isSynthetic ? 0 : 6
+            };
+        });
+
+        return {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: !isOffscreenPdf,
+                maintainAspectRatio: false,
+                animation: isOffscreenPdf ? false : undefined,
+                layout: isOffscreenPdf ? { padding: { left: 10, right: 25, top: 12, bottom: 6 } } : undefined,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: fontLegend, weight: '600' }, padding: isOffscreenPdf ? 12 : 8 } },
+                    tooltip: {
+                        filter: (item) => !item.raw?.isSynthetic,
+                        callbacks: {
+                            title: (items) => items?.[0]?.raw ? `Minuto ${items[0].raw.tiempo || `${items[0].parsed.x}'`}` : '',
+                            label: (ctx) => `${ctx.dataset.label.replace(/\s*\(\d+\)$/, '')}: acumulado ${ctx.parsed.y}`
+                        }
+                    }
+                },
+                scales: {
+                    x: { type: 'linear', min: 0, max: maxMinuto, title: { display: true, text: 'Minutos', font: { size: fontTitle } }, ticks: { stepSize: 5, font: { size: fontTick } }, grid: { color: '#f1f5f9' } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0, font: { size: fontTick } }, title: { display: true, text: 'Acumulado', font: { size: fontTitle } }, grid: { color: '#f1f5f9' } }
+                }
+            }
+        };
+    }
+
+    // Modo 'clasica'
+    const tDatasets = Object.keys(tData).map(accKey => {
+        const color = cByAcc[accKey] || '#2563eb';
+        return {
+            label: accKey,
+            data: tData[accKey],
+            pointStyle: getIconCanvas(iByAcc[accKey] || 'fa-circle', color),
+            pointRadius: isOffscreenPdf ? 9 : 8,
+            pointHoverRadius: 10,
+            pointBorderWidth: 0,
+            backgroundColor: color,
+            borderColor: color,
+            showLine: false
+        };
+    });
+
+    return {
+        type: 'scatter',
+        data: { datasets: tDatasets },
+        options: {
+            responsive: !isOffscreenPdf,
+            maintainAspectRatio: false,
+            animation: isOffscreenPdf ? false : undefined,
+            layout: isOffscreenPdf ? { padding: { left: 10, right: 25, top: 12, bottom: 6 } } : undefined,
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: isOffscreenPdf ? 10 : 8, font: { size: fontLegend, weight: isOffscreenPdf ? 'bold' : 'normal' }, padding: isOffscreenPdf ? 14 : 8 } }
+            },
+            scales: {
+                x: { type: 'linear', min: 0, max: maxMinuto, title: { display: true, text: isOffscreenPdf ? `Minutos del Partido (0' a ${maxMinuto}')` : 'Minutos', font: { size: fontTitle } }, ticks: { stepSize: 5, font: { size: fontTick } } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: fontTick } }, title: { display: true, text: isOffscreenPdf ? 'Nº Acciones Acumuladas' : 'Acumulado', font: { size: fontTitle } } }
+            }
+        }
+    };
+}
+
+function renderTemporalChartFromCurrentPayload() {
+    const temporalCanvas = document.getElementById('stats-temporal-chart');
+    if (!temporalCanvas || !window.Chart || !currentStatsChartPayload) return;
+
+    if (window.temporalChartInstance) {
+        window.temporalChartInstance.destroy();
+        window.temporalChartInstance = null;
+    }
+
+    try {
+        const cfg = buildTemporalChartConfig(currentStatsChartPayload, temporalChartMode, temporalLineasFilter, false);
+        window.temporalChartInstance = new Chart(temporalCanvas, cfg);
+    } catch (tempErr) {
+        console.error('Error inicializando temporalChartInstance:', tempErr);
     }
 }
 
