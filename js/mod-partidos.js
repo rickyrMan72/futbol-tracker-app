@@ -207,33 +207,7 @@ export function initPartidos() {
                 ctx1.fillStyle = '#ffffff';
                 ctx1.fillRect(0, 0, 1400, 420);
 
-                const c1 = new Chart(offCanvas1, {
-                    type: 'bar',
-                    data: {
-                        labels: currentStatsChartPayload.distribucionLabels,
-                        datasets: [{
-                            label: 'Número de acciones',
-                            data: currentStatsChartPayload.distribucionData,
-                            backgroundColor: 'rgba(56, 189, 248, 0.75)',
-                            borderColor: 'rgb(14, 165, 233)',
-                            borderWidth: 1.5,
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: false,
-                        maintainAspectRatio: false,
-                        animation: false,
-                        layout: {
-                            padding: { left: 10, right: 15, top: 10, bottom: 5 }
-                        },
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: { ticks: { font: { size: 12, weight: 'bold' }, color: '#334155' }, grid: { display: false } },
-                            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: '#475569' }, grid: { color: '#f1f5f9' } }
-                        }
-                    }
-                });
+                const c1 = new Chart(offCanvas1, buildDistribucionChartConfig(currentStatsChartPayload, true));
                 chart1Img = offCanvas1.toDataURL('image/png');
                 c1.destroy();
             } catch (e) {
@@ -1822,9 +1796,6 @@ async function abrirEstadisticas(par) {
         if (window.statsChartInstance) window.statsChartInstance.destroy();
         if (window.temporalChartInstance) window.temporalChartInstance.destroy();
         
-        const labels = Object.keys(distribucion);
-        const data = Object.values(distribucion);
-        
         if (!window.Chart) {
             try {
                 await new Promise((resolve, reject) => {
@@ -1840,26 +1811,7 @@ async function abrirEstadisticas(par) {
         }
         
         if (window.Chart) {
-            window.statsChartInstance = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Número de acciones',
-                        data: data,
-                        backgroundColor: 'rgba(56, 189, 248, 0.6)',
-                        borderColor: 'rgb(14, 165, 233)',
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                }
-            });
+            window.statsChartInstance = new Chart(canvas, buildDistribucionChartConfig(currentStatsChartPayload, false));
             
             if (temporalCanvas && Object.keys(temporalData).length > 0) {
                 updateTemporalSelectorUI();
@@ -1870,6 +1822,229 @@ async function abrirEstadisticas(par) {
         wrapper.classList.add('hidden');
         if (temporalWrapper) temporalWrapper.classList.add('hidden');
     }
+}
+
+function buildDistribucionChartConfig(payload, isOffscreenPdf = false) {
+    const events = payload?.temporalEvents || [];
+    let tirosEquipoPuerta = 0;
+    let tirosEquipoFuera = 0;
+    let tirosRivalFuera = 0;
+    let tirosRivalParada = 0;
+    let tirosRivalParadaGol = 0;
+    const otrasAcciones = {};
+
+    if (events.length > 0) {
+        events.forEach(ev => {
+            const t = (ev.tipo || '').toLowerCase();
+            const n = (ev.nombre || '').toLowerCase();
+
+            if (t === 'tiro-puerta' || n.includes('tiro a puerta')) {
+                tirosEquipoPuerta++;
+            } else if (t === 'tiro-fuera' || n.includes('tiro fuera')) {
+                tirosEquipoFuera++;
+            } else if (t === 'tiro-rival' || n.includes('tiro rival')) {
+                tirosRivalFuera++;
+            } else if (n.includes('parada') && n.includes('gol')) {
+                tirosRivalParadaGol++;
+            } else if (t.startsWith('parada') || n.includes('parada')) {
+                tirosRivalParada++;
+            } else {
+                otrasAcciones[ev.nombre] = (otrasAcciones[ev.nombre] || 0) + 1;
+            }
+        });
+    } else {
+        const dLabels = payload?.distribucionLabels || [];
+        const dData = payload?.distribucionData || [];
+        dLabels.forEach((lbl, idx) => {
+            const n = (lbl || '').toLowerCase();
+            const val = dData[idx] || 0;
+            if (n.includes('tiro a puerta')) tirosEquipoPuerta += val;
+            else if (n.includes('tiro fuera')) tirosEquipoFuera += val;
+            else if (n.includes('tiro rival')) tirosRivalFuera += val;
+            else if (n.includes('parada') && n.includes('gol')) tirosRivalParadaGol += val;
+            else if (n.includes('parada')) tirosRivalParada += val;
+            else otrasAcciones[lbl] = (otrasAcciones[lbl] || 0) + val;
+        });
+    }
+
+    const totalTirosEquipo = tirosEquipoPuerta + tirosEquipoFuera;
+    const totalTirosRival = tirosRivalFuera + tirosRivalParada + tirosRivalParadaGol;
+
+    const labels = [];
+    if (totalTirosEquipo > 0) labels.push('Tiros Equipo');
+    if (totalTirosRival > 0) labels.push('Tiros Rival');
+    Object.keys(otrasAcciones).forEach(k => labels.push(k));
+
+    const makeSeries = (valueForTirosEquipo, valueForTirosRival, valueForOtrasFn) => {
+        return labels.map(lbl => {
+            if (lbl === 'Tiros Equipo') return valueForTirosEquipo;
+            if (lbl === 'Tiros Rival') return valueForTirosRival;
+            return valueForOtrasFn ? valueForOtrasFn(lbl) : 0;
+        });
+    };
+
+    const datasets = [];
+    if (tirosEquipoPuerta > 0) {
+        datasets.push({
+            label: 'Tiro a puerta',
+            data: makeSeries(tirosEquipoPuerta, 0, null),
+            backgroundColor: '#10b981',
+            borderColor: '#059669',
+            borderWidth: 1,
+            borderRadius: 3
+        });
+    }
+    if (tirosEquipoFuera > 0) {
+        datasets.push({
+            label: 'Tiro fuera',
+            data: makeSeries(tirosEquipoFuera, 0, null),
+            backgroundColor: '#94a3b8',
+            borderColor: '#64748b',
+            borderWidth: 1,
+            borderRadius: 3
+        });
+    }
+    if (tirosRivalParadaGol > 0) {
+        datasets.push({
+            label: 'Parada GOL',
+            data: makeSeries(0, tirosRivalParadaGol, null),
+            backgroundColor: '#ef4444',
+            borderColor: '#dc2626',
+            borderWidth: 1,
+            borderRadius: 3
+        });
+    }
+    if (tirosRivalParada > 0) {
+        datasets.push({
+            label: 'Parada',
+            data: makeSeries(0, tirosRivalParada, null),
+            backgroundColor: '#0ea5e9',
+            borderColor: '#0284c7',
+            borderWidth: 1,
+            borderRadius: 3
+        });
+    }
+    if (tirosRivalFuera > 0) {
+        datasets.push({
+            label: 'Tiro Rival',
+            data: makeSeries(0, tirosRivalFuera, null),
+            backgroundColor: '#f59e0b',
+            borderColor: '#d97706',
+            borderWidth: 1,
+            borderRadius: 3
+        });
+    }
+    if (Object.keys(otrasAcciones).length > 0) {
+        datasets.push({
+            label: 'Resto de acciones',
+            data: makeSeries(0, 0, (lbl) => otrasAcciones[lbl] || 0),
+            backgroundColor: 'rgba(56, 189, 248, 0.72)',
+            borderColor: 'rgb(14, 165, 233)',
+            borderWidth: 1,
+            borderRadius: 4
+        });
+    }
+
+    const barTotalsPlugin = {
+        id: 'distribucionBarTotals',
+        afterDatasetsDraw(chart) {
+            const { ctx, scales } = chart;
+            const xScale = scales.x;
+            const yScale = scales.y;
+            if (!xScale || !yScale) return;
+
+            ctx.save();
+            ctx.font = `bold ${isOffscreenPdf ? 12 : 11}px system-ui, -apple-system, sans-serif`;
+            ctx.fillStyle = '#334155';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+
+            chart.data.labels.forEach((_, idx) => {
+                let total = 0;
+                chart.data.datasets.forEach(ds => {
+                    total += Number(ds.data?.[idx] || 0);
+                });
+                if (total > 0) {
+                    const x = xScale.getPixelForValue(idx);
+                    const y = yScale.getPixelForValue(total);
+                    ctx.fillText(String(total), x, y - 4);
+                }
+            });
+            ctx.restore();
+        }
+    };
+
+    const maxBarTotal = Math.max(
+        1,
+        totalTirosEquipo,
+        totalTirosRival,
+        ...Object.values(otrasAcciones)
+    );
+
+    const hasShotLegend = totalTirosEquipo > 0 || totalTirosRival > 0;
+
+    return {
+        type: 'bar',
+        data: { labels, datasets },
+        plugins: [barTotalsPlugin],
+        options: {
+            responsive: !isOffscreenPdf,
+            maintainAspectRatio: false,
+            animation: isOffscreenPdf ? false : undefined,
+            layout: {
+                padding: isOffscreenPdf
+                    ? { left: 10, right: 15, top: 20, bottom: 5 }
+                    : { top: 18 }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            },
+            plugins: {
+                legend: {
+                    display: hasShotLegend,
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: isOffscreenPdf ? 12 : 10,
+                        font: { size: isOffscreenPdf ? 11 : 10, weight: '600' },
+                        filter: (item) => item.text !== 'Resto de acciones'
+                    }
+                },
+                tooltip: {
+                    filter: (item) => (item.parsed?.y || 0) > 0,
+                    callbacks: {
+                        footer: (items) => {
+                            if (!items || items.length <= 1) return '';
+                            const sum = items.reduce((acc, it) => acc + (it.parsed?.y || 0), 0);
+                            return `Total acumulado: ${sum}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { display: false },
+                    ticks: {
+                        font: { size: isOffscreenPdf ? 12 : 10, weight: isOffscreenPdf ? 'bold' : 'normal' },
+                        color: '#334155'
+                    }
+                },
+                y: {
+                    stacked: true,
+                    beginAtZero: true,
+                    suggestedMax: maxBarTotal + 1,
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0,
+                        font: { size: isOffscreenPdf ? 11 : 10 },
+                        color: '#475569'
+                    },
+                    grid: { color: '#f1f5f9' }
+                }
+            }
+        }
+    };
 }
 
 function updateTemporalSelectorUI() {
